@@ -31,13 +31,14 @@ def flame_icon(size):
     """A teardrop flame, yellow core to orange edge, on black."""
     rows = []
     cx = size / 2
-    base_y = size * 0.80; tip_y = size * 0.12; rx_max = size * 0.26
+    base_y = size * 0.86; tip_y = size * 0.10; rx_max = size * 0.27
     for y in range(size):
         row = []
         for x in range(size):
             if tip_y <= y <= base_y:
                 t = (y - tip_y) / (base_y - tip_y)          # 0 at tip, 1 at base
-                rx = rx_max * (t ** 0.6) * (1 - 0.35 * t)
+                # widest about two thirds down, pointed tip, narrowing to the wick
+                rx = rx_max * math.sin(math.pi * t ** 1.6) ** 0.9
                 d = abs(x - cx) / max(rx, 1e-6)
             else:
                 d = 2
