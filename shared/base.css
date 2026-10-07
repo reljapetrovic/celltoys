@@ -1,0 +1,26 @@
+:root {
+  color-scheme: dark;
+  --fg: #ff8a40;
+  --fg-dim: rgba(255, 138, 64, 0.55);
+  --bg: #000;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: var(--bg); color: var(--fg); }
+body {
+  font: 17px/1.4 -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+a { color: inherit; }
+button, input, select {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 1px solid var(--fg-dim);
+  border-radius: 12px;
+  min-height: 44px;
+  padding: 0 14px;
+}
+button { cursor: pointer; }
+button[aria-pressed="true"] { background: var(--fg-dim); color: #000; }
