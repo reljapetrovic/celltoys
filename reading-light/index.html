@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#000000">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Reading Light">
+  <link rel="manifest" href="/reading-light/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/reading-light/icon-180.png">
+  <title>Reading Light</title>
+  <link rel="stylesheet" href="/shared/base.css">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div id="light" aria-label="Reading light surface"></div>
+  <div id="clock" aria-hidden="true"></div>
+  <div id="hint" hidden>Set your phone brightness to about 15 %, then adjust here.</div>
+
+  <section id="sheet" hidden aria-label="Controls">
+    <div class="row status">
+      <span id="status">Reading</span>
+      <span id="remaining"></span>
+    </div>
+    <div class="row presets" role="group" aria-label="Colour">
+      <button data-preset="candle">Candle</button>
+      <button data-preset="amber">Amber</button>
+      <button data-preset="red">Deep Red</button>
+    </div>
+    <label class="row"><span>Brightness</span>
+      <input id="brightness" type="range" min="0.2" max="1" step="0.01"></label>
+    <label class="row"><span>Hold <output id="holdOut"></output> min</span>
+      <input id="hold" type="range" min="0" max="120" step="1"></label>
+    <label class="row"><span>Fade <output id="fadeOut"></output> min</span>
+      <input id="fade" type="range" min="1" max="60" step="1"></label>
+    <label class="row"><span>Night-light <output id="floorOut"></output> %</span>
+      <input id="floor" type="range" min="0.1" max="0.5" step="0.01"></label>
+    <div class="row toggles">
+      <button id="hueShift" aria-pressed="true">Warm as it fades</button>
+      <button id="showClock" aria-pressed="true">Clock</button>
+    </div>
+    <div class="row actions">
+      <button id="extend">+5 min</button>
+      <button id="pause">Pause</button>
+      <button id="restart">Restart</button>
+      <button id="off">Off</button>
+    </div>
+    <p class="help">Tap: controls · Double-tap: pause · Swipe up/down: brightness</p>
+  </section>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
