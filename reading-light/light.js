@@ -65,13 +65,6 @@ export function fadeBrightness(start, floor, t) {
   return start * (floor / start) ** tt;
 }
 
-// Inverse: which start brightness puts the fade at `level` when progress is t.
-// fade(start, floor, t) = start^(1-t) * floor^t  =>  start = (level / floor^t)^(1/(1-t))
-export function startForLevel(level, floor, t) {
-  const tt = Math.min(0.999, Math.max(0, t));
-  return (level / floor ** tt) ** (1 / (1 - tt));
-}
-
 export function hueShiftPreset(presetId, t, enabled) {
   if (!enabled || t < 0.5) return presetById(presetId).id;
   const i = PRESETS.findIndex(p => p.id === presetId);
@@ -96,12 +89,43 @@ export function extendSchedule(startedAt, minutes) {
   return startedAt + minutes * MIN_MS;
 }
 
-export function currentLight(settings, timer) {
+// Session-only brightness floor/ceiling for swipe offsets outside the hold phase.
+const OFFSET_MIN = 0.02;
+
+// `offset` is a session-only perceptual adjustment (from swiping) applied during
+// fade and floor; during hold the swipe edits startBrightness itself instead.
+export function currentLight(settings, timer, offset = 0) {
   const { phase, fadeProgress } = timer;
   let brightness;
   if (phase === 'hold') brightness = settings.startBrightness;
   else if (phase === 'fade') brightness = fadeBrightness(settings.startBrightness, settings.floorBrightness, fadeProgress);
   else brightness = settings.floorBrightness;
+  if (phase !== 'hold') brightness = Math.min(1, Math.max(OFFSET_MIN, brightness + offset));
   const presetId = hueShiftPreset(settings.preset, phase === 'hold' ? 0 : fadeProgress, settings.hueShift);
   return { presetId, brightness, rgb: brightnessToRgb(presetId, brightness) };
+}
+
+// Colour for the control sheet: the preset at a fixed readable level, so the
+// controls stay legible even when the light itself is a faint ember.
+export function uiColor(presetId) {
+  return brightnessToRgb(presetId, 0.6);
+}
+
+// How often the page needs to re-render. Only the fade changes visibly.
+export function renderIntervalMs(phase, off) {
+  return !off && phase === 'fade' ? 100 : 1000;
+}
+
+const RESUME_GRACE_MS = 2 * 60 * MIN_MS;
+
+// Decide whether a saved session should continue after a reload (e.g. iOS
+// evicting the PWA). Returns { startedAt, pausedAt } or null for a fresh start.
+export function resumeSession(saved, settings, now) {
+  if (!saved || typeof saved !== 'object' || saved.off) return null;
+  const { startedAt } = saved;
+  if (typeof startedAt !== 'number' || !Number.isFinite(startedAt) || startedAt > now) return null;
+  const windowMs = (settings.holdMinutes + settings.fadeMinutes) * MIN_MS + RESUME_GRACE_MS;
+  if (now - startedAt > windowMs) return null;
+  const pausedAt = typeof saved.pausedAt === 'number' && Number.isFinite(saved.pausedAt) ? saved.pausedAt : null;
+  return { startedAt, pausedAt };
 }

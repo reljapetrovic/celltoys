@@ -1,6 +1,6 @@
 import {
-  DEFAULT_SETTINGS, LIMITS, clampSettings, timerState, currentLight,
-  extendSchedule, startForLevel,
+  DEFAULT_SETTINGS, clampSettings, timerState, currentLight, extendSchedule,
+  uiColor, renderIntervalMs, resumeSession,
 } from './light.js';
 import { createStore } from '../shared/settings-store.js';
 import { attachGestures } from '../shared/gestures.js';
@@ -11,6 +11,12 @@ const store = createStore({
   key: 'celltoys.reading-light',
   version: 1,
   defaults: { ...DEFAULT_SETTINGS, seenHint: false },
+});
+// The running session survives a reload (iOS may evict a backgrounded PWA).
+const sessionStore = createStore({
+  key: 'celltoys.reading-light.session',
+  version: 1,
+  defaults: { startedAt: null, pausedAt: null, off: false },
 });
 const $ = id => document.getElementById(id);
 const els = {
@@ -23,9 +29,11 @@ const els = {
 };
 
 let settings = clampSettings(store.load());
-let startedAt = Date.now();
-let pausedAt = null;      // timestamp when paused, else null
+const resumed = resumeSession(sessionStore.load(), settings, Date.now());
+let startedAt = resumed?.startedAt ?? Date.now();
+let pausedAt = resumed?.pausedAt ?? null;   // timestamp when paused, else null
 let off = false;
+let offset = 0;           // session-only swipe adjustment during fade/floor
 let sheetTimer = null;
 let awake = null;
 
@@ -37,29 +45,34 @@ function saveSettings(partial) {
   store.save(settings); // store.save merges onto stored data, so seenHint survives
   syncControls();
 }
+function saveSession() { sessionStore.save({ startedAt, pausedAt, off }); }
 
 // ---------- rendering ----------
 const PHASE_LABEL = { hold: 'Reading', fade: 'Dimming', floor: 'Night-light' };
+const rgbCss = ([r, g, b], a = 1) => (a === 1 ? `rgb(${r}, ${g}, ${b})` : `rgba(${r}, ${g}, ${b}, ${a})`);
 
 function render() {
+  const t = timer();
+  const { presetId, rgb } = currentLight(settings, t, offset);
+  const ui = uiColor(presetId);
+  document.documentElement.style.setProperty('--fg', rgbCss(ui));
+  document.documentElement.style.setProperty('--fg-dim', rgbCss(ui, 0.55));
   if (off) {
     els.light.style.background = '#000';
-    els.clock.style.color = '#200';
+    els.clock.textContent = '';
     return;
   }
-  const t = timer();
-  const { rgb } = currentLight(settings, t);
-  const css = `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+  const css = rgbCss(rgb);
   els.light.style.background = css;
   els.clock.style.color = css;
-  document.documentElement.style.setProperty('--fg', css);
   els.status.textContent = pausedAt ? 'Paused' : PHASE_LABEL[t.phase];
   els.remaining.textContent = t.phase === 'floor' ? '' : `${Math.ceil(t.remainingMs / 60000)} min left`;
+  renderClock();
 }
 
 function tick() {
   if (document.visibilityState === 'visible') render();
-  requestAnimationFrame(tick);
+  setTimeout(tick, renderIntervalMs(timer().phase, off));
 }
 
 function renderClock() {
@@ -82,6 +95,12 @@ function syncControls() {
   renderClock();
 }
 
+function showHint(text, ms = 8000) {
+  els.hint.textContent = text;
+  els.hint.hidden = false;
+  setTimeout(() => { els.hint.hidden = true; }, ms);
+}
+
 // ---------- sheet visibility ----------
 function showSheet() {
   els.sheet.hidden = false;
@@ -96,33 +115,48 @@ function armSheetHide() {
 els.sheet.addEventListener('pointerdown', armSheetHide);
 els.sheet.addEventListener('input', armSheetHide);
 
+// ---------- wake lock ----------
+async function ensureAwake() {
+  if (awake) return;
+  awake = await keepAwake();
+  if (!awake.ok) showHint('Keep the screen awake in phone settings');
+}
+function releaseAwake() {
+  awake?.release();
+  awake = null;
+}
+
 // ---------- actions ----------
 function togglePause() {
   if (off) return;
   if (pausedAt) { startedAt += Date.now() - pausedAt; pausedAt = null; }
   else pausedAt = Date.now();
+  saveSession();
   syncControls();
 }
-function restart() { off = false; pausedAt = null; startedAt = Date.now(); syncControls(); }
-function turnOff() { off = true; hideSheet(); render(); renderClock(); }
+function restart() {
+  off = false; pausedAt = null; startedAt = Date.now(); offset = 0;
+  saveSession();
+  ensureAwake();
+  syncControls();
+  render();
+}
+function turnOff() {
+  off = true;
+  saveSession();
+  releaseAwake();
+  hideSheet();
+  render();
+}
 
 function adjustBrightness(delta) {
   if (off) return;
-  const t = timer();
-  if (t.phase === 'hold') {
+  if (timer().phase === 'hold') {
     saveSettings({ startBrightness: settings.startBrightness + delta });
-  } else if (t.phase === 'fade') {
-    const { brightness } = currentLight(settings, t);
-    const level = Math.min(1, Math.max(LIMITS.floorBrightness[0], brightness + delta));
-    saveSettings({ startBrightness: startForLevel(level, settings.floorBrightness, t.fadeProgress) });
   } else {
-    saveSettings({ floorBrightness: settings.floorBrightness + delta });
+    offset = Math.min(1, Math.max(-1, offset + delta));
   }
-}
-
-async function firstGesture() {
-  if (!awake) awake = await keepAwake();
-  requestFullscreen();
+  render();
 }
 
 // ---------- wiring ----------
@@ -134,10 +168,10 @@ attachGestures(els.light, {
   onDoubleTap: togglePause,
   onSwipe({ dy }) { adjustBrightness(-dy / 300); },
 });
-els.light.addEventListener('pointerdown', firstGesture, { once: true });
+els.light.addEventListener('pointerdown', () => { ensureAwake(); requestFullscreen(); }, { once: true });
 
 for (const b of els.sheet.querySelectorAll('[data-preset]')) {
-  b.addEventListener('click', () => saveSettings({ preset: b.dataset.preset }));
+  b.addEventListener('click', () => { saveSettings({ preset: b.dataset.preset }); render(); });
 }
 els.brightness.addEventListener('input', () => saveSettings({ startBrightness: Number(els.brightness.value) }));
 els.hold.addEventListener('input', () => saveSettings({ holdMinutes: Number(els.hold.value) }));
@@ -145,7 +179,7 @@ els.fade.addEventListener('input', () => saveSettings({ fadeMinutes: Number(els.
 els.floor.addEventListener('input', () => saveSettings({ floorBrightness: Number(els.floor.value) }));
 els.hueShift.addEventListener('click', () => saveSettings({ hueShift: !settings.hueShift }));
 els.showClock.addEventListener('click', () => saveSettings({ showClock: !settings.showClock }));
-els.extend.addEventListener('click', () => { startedAt = extendSchedule(startedAt, 5); armSheetHide(); });
+els.extend.addEventListener('click', () => { startedAt = extendSchedule(startedAt, 5); saveSession(); armSheetHide(); });
 els.pause.addEventListener('click', togglePause);
 els.restart.addEventListener('click', restart);
 els.off.addEventListener('click', turnOff);
@@ -154,13 +188,11 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 
 // first-run hint
 if (!store.load().seenHint) {
-  els.hint.hidden = false;
-  setTimeout(() => { els.hint.hidden = true; }, 8000);
+  showHint('Set your phone brightness to about 15 %, then adjust here.');
   store.save({ seenHint: true });
 }
 
+saveSession();
 syncControls();
 render();
-renderClock();
-setInterval(renderClock, 1000);
-requestAnimationFrame(tick);
+tick();

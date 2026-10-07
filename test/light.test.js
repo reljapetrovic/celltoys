@@ -1,8 +1,9 @@
 import { describe, test, expect } from 'vitest';
 import {
   PRESETS, DEFAULT_SETTINGS, LIMITS, clampSettings,
-  brightnessToRgb, fadeBrightness, startForLevel, hueShiftPreset,
+  brightnessToRgb, fadeBrightness, hueShiftPreset,
   timerState, currentLight, extendSchedule,
+  uiColor, renderIntervalMs, resumeSession,
 } from '../reading-light/light.js';
 
 const MIN = 60_000;
@@ -65,16 +66,6 @@ describe('fadeBrightness', () => {
     expect(Number.isFinite(a) && Number.isFinite(b)).toBe(true);
     expect(a).toBeLessThan(b);
     expect(fadeBrightness(0.2, 0.5, 1)).toBeCloseTo(0.5);
-  });
-});
-
-describe('startForLevel', () => {
-  test('inverts fadeBrightness at progress t', () => {
-    const start = startForLevel(0.4, 0.2, 0.3);
-    expect(fadeBrightness(start, 0.2, 0.3)).toBeCloseTo(0.4);
-  });
-  test('at t=0 returns level itself', () => {
-    expect(startForLevel(0.7, 0.2, 0)).toBeCloseTo(0.7);
   });
 });
 
@@ -142,5 +133,60 @@ describe('currentLight', () => {
     const l = currentLight(s, { phase: 'floor', fadeProgress: 1 });
     expect(l.presetId).toBe('red');
     expect(l.brightness).toBe(0.2);
+  });
+});
+
+describe('currentLight with session offset', () => {
+  const s = clampSettings({ preset: 'amber', startBrightness: 1, floorBrightness: 0.2, hueShift: false });
+  test('hold ignores the offset (swipe there edits startBrightness instead)', () => {
+    expect(currentLight(s, { phase: 'hold', fadeProgress: 0 }, -0.5).brightness).toBe(1);
+  });
+  test('fade adds the offset to the curve value', () => {
+    const base = fadeBrightness(1, 0.2, 0.5);
+    expect(currentLight(s, { phase: 'fade', fadeProgress: 0.5 }, 0.1).brightness).toBeCloseTo(base + 0.1);
+  });
+  test('floor adds the offset and clamps to [0.02, 1]', () => {
+    expect(currentLight(s, { phase: 'floor', fadeProgress: 1 }, 0.3).brightness).toBeCloseTo(0.5);
+    expect(currentLight(s, { phase: 'floor', fadeProgress: 1 }, -5).brightness).toBe(0.02);
+    expect(currentLight(s, { phase: 'floor', fadeProgress: 1 }, 5).brightness).toBe(1);
+  });
+  test('offset defaults to 0', () => {
+    expect(currentLight(s, { phase: 'floor', fadeProgress: 1 }).brightness).toBe(0.2);
+  });
+});
+
+describe('uiColor', () => {
+  test('is the preset at a fixed readable brightness, independent of the fade', () => {
+    expect(uiColor('red')).toEqual(brightnessToRgb('red', 0.6));
+    expect(uiColor('amber')[0]).toBeGreaterThan(40);
+  });
+});
+
+describe('renderIntervalMs', () => {
+  test('renders often during the fade and slowly otherwise', () => {
+    expect(renderIntervalMs('fade', false)).toBeLessThanOrEqual(100);
+    expect(renderIntervalMs('hold', false)).toBeGreaterThanOrEqual(500);
+    expect(renderIntervalMs('floor', false)).toBeGreaterThanOrEqual(500);
+    expect(renderIntervalMs('fade', true)).toBeGreaterThanOrEqual(500);
+  });
+});
+
+describe('resumeSession', () => {
+  const s = clampSettings({ holdMinutes: 15, fadeMinutes: 10 });
+  const t0 = 5_000_000;
+  test('resumes a recent, running session', () => {
+    expect(resumeSession({ startedAt: t0, pausedAt: null, off: false }, s, t0 + 20 * MIN)).toEqual({ startedAt: t0, pausedAt: null });
+  });
+  test('resumes a paused session, keeping its paused timestamp', () => {
+    expect(resumeSession({ startedAt: t0, pausedAt: t0 + 3 * MIN, off: false }, s, t0 + 20 * MIN)).toEqual({ startedAt: t0, pausedAt: t0 + 3 * MIN });
+  });
+  test('starts fresh when the session is older than hold + fade + 2 h', () => {
+    expect(resumeSession({ startedAt: t0, pausedAt: null, off: false }, s, t0 + (25 + 121) * MIN)).toBeNull();
+  });
+  test('starts fresh when the saved session was off, missing, or malformed', () => {
+    expect(resumeSession({ startedAt: t0, pausedAt: null, off: true }, s, t0 + MIN)).toBeNull();
+    expect(resumeSession(null, s, t0)).toBeNull();
+    expect(resumeSession({ startedAt: 'x' }, s, t0)).toBeNull();
+    expect(resumeSession({ startedAt: t0 + 10 * MIN }, s, t0)).toBeNull(); // from the future
   });
 });
