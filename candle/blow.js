@@ -1,8 +1,12 @@
 // Blow detector: intensity 0..1 from mic loudness above an adaptive noise
-// floor, gated by the share of energy below 400 Hz (blowing is low rumble;
+// floor, gated by the share of power below 800 Hz (blowing is low rumble;
 // speech and claps are not). Pure: takes analyser buffers, keeps its own state.
+//
+// timeData: Float32Array samples from getFloatTimeDomainData.
+// freqData: Float32Array of dB per bin from getFloatFrequencyData (-Infinity
+// for silent bins). Converted to linear power before summing.
 
-const LOW_HZ = 400, FLOOR_RISE = 0.002, DEAD = 0.01, FULL = 0.2;
+const LOW_HZ = 800, FLOOR_RISE = 0.002, DEAD = 0.01, FULL = 0.2;
 const TAU_RISE = 0.05, TAU_FALL = 0.25;
 const clamp01 = v => Math.min(1, Math.max(0, v));
 
@@ -20,7 +24,7 @@ export function createBlowDetector({ sampleRate, fftSize, sensitivity = 1 }) {
 
     let low = 0, total = 0;
     for (let i = 0; i < freqData.length; i++) {
-      const e = freqData[i] * freqData[i];
+      const e = 10 ** (freqData[i] / 10); // dB -> linear power; -Infinity -> 0
       total += e;
       if (i < lowBins) low += e;
     }

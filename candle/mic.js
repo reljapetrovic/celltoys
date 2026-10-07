@@ -1,28 +1,42 @@
 // Microphone capture for the blow detector. Disables echo cancellation,
 // noise suppression and AGC so blowing is not filtered out.
+//
+// The AudioContext is created synchronously, inside the user gesture, before
+// the permission prompt consumes it (iOS Safari). resume() is never awaited:
+// if the context is still suspended later, call resume() from a pointerup.
 
 export async function startMic() {
   if (!navigator.mediaDevices?.getUserMedia) throw new Error('getUserMedia unavailable');
-  const stream = await navigator.mediaDevices.getUserMedia({
-    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
-  });
   const Ctx = window.AudioContext || window.webkitAudioContext;
   const ctx = new Ctx();
-  await ctx.resume();
+  ctx.resume().catch(() => {});
+
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+    });
+  } catch (err) {
+    ctx.close().catch(() => {});
+    throw err;
+  }
+
   const source = ctx.createMediaStreamSource(stream);
   const analyser = ctx.createAnalyser();
   analyser.fftSize = 1024;
   analyser.smoothingTimeConstant = 0.5;
   source.connect(analyser);
 
-  const onVisible = () => { if (document.visibilityState === 'visible' && ctx.state !== 'running') ctx.resume(); };
+  const resume = () => { if (ctx.state !== 'running') ctx.resume().catch(() => {}); };
+  const onVisible = () => { if (document.visibilityState === 'visible') resume(); };
   document.addEventListener('visibilitychange', onVisible);
 
   return {
     sampleRate: ctx.sampleRate,
     fftSize: analyser.fftSize,
     readTime: buf => analyser.getFloatTimeDomainData(buf),
-    readFreq: buf => analyser.getByteFrequencyData(buf),
+    readFreq: buf => analyser.getFloatFrequencyData(buf),
+    resume,
     stop() {
       document.removeEventListener('visibilitychange', onVisible);
       stream.getTracks().forEach(t => t.stop());

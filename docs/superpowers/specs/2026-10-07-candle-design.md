@@ -21,7 +21,7 @@ it again. Talking or clapping near it does not blow it out.
 1. Start screen: unlit candle, "Tap to light". The tap creates the
    AudioContext and requests the mic (both need a user gesture).
 2. Blow detector: intensity 0..1 from mic loudness above an adaptive noise
-   floor, gated by low-frequency share so speech and claps are mostly ignored,
+   floor, gated by the share of power below 800 Hz so speech and claps are mostly ignored,
    with attack/release smoothing and a persisted sensitivity setting.
 3. Flame model: lean, size, health, lit/unlit, smoke, relight flare.
 4. Canvas 2D renderer: candle body, wick, layered flame, glow, sparks, smoke.
@@ -56,7 +56,9 @@ test/blow.test.js, test/flame.test.js
 `{ update(timeData, freqData, dt), setSensitivity(s) }`.
 
 - `timeData`: Float32Array of samples (-1..1), from `getFloatTimeDomainData`.
-- `freqData`: Uint8Array of bin magnitudes, from `getByteFrequencyData`.
+- `freqData`: Float32Array of dB per bin, from `getFloatFrequencyData`
+  (`-Infinity` for silent bins). Byte data must not be used: it is a dB
+  mapping, and squaring it collapses the dynamic range so the gate never opens.
 - `update` returns `{ intensity, loudness, lowFraction, floor }`, all 0..1.
 
 Per call:
@@ -64,8 +66,8 @@ Per call:
 2. Noise floor: drops immediately to `rms` when `rms` is lower; otherwise
    rises at 0.002 per second. Starts at 0.
 3. `loudness` = clamp((rms − floor − 0.01) / (0.2 / sensitivity), 0, 1).
-4. `lowFraction` = Σ bin² for bins below 400 Hz / Σ bin² over all bins
-   (bin width = sampleRate / fftSize). 0 when all bins are zero.
+4. `lowFraction` = Σ 10^(dB/10) for bins below 800 Hz / Σ 10^(dB/10) over all
+   bins (bin width = sampleRate / fftSize). 0 when total power is 0.
 5. `gate` = clamp((lowFraction − 0.35) / 0.3, 0, 1).
 6. `raw` = loudness × gate.
 7. `intensity` eases toward `raw` with time constant 0.05 s when rising and
@@ -92,10 +94,13 @@ State: `{ lit, lean, size, health, smoke, flare, wind }`.
 
 ### Mic (`candle/mic.js`)
 
-`startMic()` → `Promise<{ sampleRate, fftSize, readTime(Float32Array), readFreq(Uint8Array), stop() }>`.
-Requests `{ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }`,
-creates an AudioContext (resumed), an AnalyserNode with `fftSize = 1024`,
-`smoothingTimeConstant = 0.5`. Rejects on denial; caller handles.
+`startMic()` → `Promise<{ sampleRate, fftSize, readTime(Float32Array), readFreq(Float32Array), resume(), stop() }>`.
+Creates the AudioContext synchronously inside the user gesture (before the
+permission prompt consumes it on iOS) and calls `resume()` without awaiting;
+then requests `{ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }`
+and builds an AnalyserNode with `fftSize = 1024`, `smoothingTimeConstant = 0.5`.
+Rejects on denial (closing the context); caller handles. `resume()` is called
+again from every pointerup on the canvas and on visibility change.
 
 ### Renderer (`candle/render.js`)
 
@@ -118,7 +123,8 @@ enabled.
 - Loop with `requestAnimationFrame`; `dt` clamped to 0.05 s; skips when the
   tab is hidden. Per frame: read mic data → `detector.update` → `stepFlame`
   → `draw`.
-- Tap on the canvas when unlit → `relight`.
+- Pointerup on the canvas when unlit → `relight` (bound directly, not via the
+  shared tap recogniser, so there is no double-tap delay).
 - Gear button (top-right, dim) toggles the sheet: sensitivity slider 0.5–3,
   meter toggle. Sheet auto-hides after 5 s of no interaction.
 
@@ -136,8 +142,9 @@ smoke grey at low alpha. UI text in the dim amber from `shared/base.css`.
 
 ## 6. Testing
 
-- `test/blow.test.js`: silence → 0; low-passed noise at 0.3 RMS → > 0.6 after
-  a few frames; 1 kHz sine at 0.3 RMS → < 0.1 (gated by lowFraction);
+- `test/blow.test.js` (spectra as dB fixtures): silence → 0; blow-shaped
+  spectrum (−8 dB rumble to 800 Hz, −9 dB/octave above) at 0.3 RMS → > 0.6;
+  speech-shaped spectrum at 0.3 RMS → < 0.2; 1 kHz sine → < 0.1;
   sustained quiet raises the floor; sensitivity 2 doubles response; intensity
   rises within ~0.1 s and decays slower than it rises.
 - `test/flame.test.js`: lean follows intensity sign of wind; size shrinks with

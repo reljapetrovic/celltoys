@@ -3,7 +3,6 @@ import { INITIAL_FLAME, stepFlame, relight } from './flame.js';
 import { startMic } from './mic.js';
 import { createRenderer } from './render.js';
 import { createStore } from '../shared/settings-store.js';
-import { attachGestures } from '../shared/gestures.js';
 import { keepAwake } from '../shared/wake-lock.js';
 import { requestFullscreen } from '../shared/fullscreen.js';
 
@@ -58,7 +57,7 @@ async function start() {
     mic = await startMic();
     detector = createBlowDetector({ sampleRate: mic.sampleRate, fftSize: mic.fftSize, sensitivity: settings.sensitivity });
     timeBuf = new Float32Array(mic.fftSize);
-    freqBuf = new Uint8Array(mic.fftSize / 2);
+    freqBuf = new Float32Array(mic.fftSize / 2);
   } catch {
     showNote('Blowing needs the microphone. The candle still flickers.');
   }
@@ -88,11 +87,11 @@ els.meter.addEventListener('click', () => saveSettings({ showMeter: !settings.sh
 
 // ---------- gestures ----------
 els.start.addEventListener('pointerup', start, { once: true });
-attachGestures(els.scene, {
-  onTap() {
-    if (!started) { start(); return; }
-    if (!flame.lit) flame = relight(flame);
-  },
+// Relight on pointerup directly: no double-tap window, so no 300 ms lag.
+els.scene.addEventListener('pointerup', () => {
+  if (!started) return;
+  mic?.resume();
+  if (!flame.lit) flame = relight(flame);
 });
 
 window.addEventListener('resize', () => renderer.resize());
