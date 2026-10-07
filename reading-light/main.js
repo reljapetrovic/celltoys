@@ -168,7 +168,8 @@ attachGestures(els.light, {
   onDoubleTap: togglePause,
   onSwipe({ dy }) { adjustBrightness(-dy / 300); },
 });
-els.light.addEventListener('pointerdown', () => { ensureAwake(); requestFullscreen(); }, { once: true });
+// pointerup (not pointerdown) counts as a user activation for fullscreen in Chromium.
+els.light.addEventListener('pointerup', () => { ensureAwake(); requestFullscreen(); }, { once: true });
 
 for (const b of els.sheet.querySelectorAll('[data-preset]')) {
   b.addEventListener('click', () => { saveSettings({ preset: b.dataset.preset }); render(); });
