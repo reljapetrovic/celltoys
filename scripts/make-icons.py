@@ -27,9 +27,34 @@ def icon(size):
         rows.append(row)
     return png(size, size, rows)
 
+def flame_icon(size):
+    """A teardrop flame, yellow core to orange edge, on black."""
+    rows = []
+    cx = size / 2
+    base_y = size * 0.86; tip_y = size * 0.10; rx_max = size * 0.27
+    for y in range(size):
+        row = []
+        for x in range(size):
+            if tip_y <= y <= base_y:
+                t = (y - tip_y) / (base_y - tip_y)          # 0 at tip, 1 at base
+                # widest about two thirds down, pointed tip, narrowing to the wick
+                rx = rx_max * math.sin(math.pi * t ** 1.6) ** 0.9
+                d = abs(x - cx) / max(rx, 1e-6)
+            else:
+                d = 2
+            if d > 1:
+                row += [0, 0, 0]
+            else:
+                k = (1 - d) ** 0.8
+                row += [255, int(110 + 100 * k), int(20 + 60 * k)]
+        rows.append(row)
+    return png(size, size, rows)
+
 out = sys.argv[1]
+style = sys.argv[2] if len(sys.argv) > 2 else 'ember'
+make = flame_icon if style == 'flame' else icon
 os.makedirs(out, exist_ok=True)
 for s in (180, 512):
     with open(os.path.join(out, f'icon-{s}.png'), 'wb') as f:
-        f.write(icon(s))
+        f.write(make(s))
 print('ok')
