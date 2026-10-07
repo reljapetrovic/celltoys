@@ -22,6 +22,7 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, 'index.html'),
         readingLight: resolve(__dirname, 'reading-light/index.html'),
+        candle: resolve(__dirname, 'candle/index.html'),
       },
     },
   },
