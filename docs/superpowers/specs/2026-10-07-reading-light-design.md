@@ -1,7 +1,7 @@
 # Reading Light — design spec
 
 Date: 2026-10-07
-Status: draft for review
+Status: implemented (branch reading-light); updated after final review
 Project: celltoys (collection of small phone "toys"; Reading Light is the first)
 
 ## 1. Purpose
@@ -135,16 +135,20 @@ celltoys/
 **`reading-light/main.js`**
 
 - On load: read settings via `settings-store`, render colour, start timer
-  immediately (opening the toy *is* starting the session).
-- Timer loop: `requestAnimationFrame` while visible; recomputes colour from
-  `timerState` each frame; on `visibilitychange` back to visible, recompute at
-  once (no drift).
+  immediately (opening the toy *is* starting the session). A running session
+  (`startedAt`, `pausedAt`) is persisted too and resumed after a reload if it
+  is younger than hold + fade + 2 h and was not switched Off, so iOS evicting
+  the PWA does not relaunch at full brightness.
+- Timer loop: re-render every 100 ms during the fade and every 1 s otherwise
+  (only the fade changes visibly); on `visibilitychange` back to visible,
+  recompute at once (no drift). "Off" releases the wake lock.
 - Gestures (via `shared/gestures.js`):
   - single tap → toggle control sheet (auto-hides after 4 s of no interaction)
   - double tap → pause/resume fade
   - vertical swipe → adjust current brightness ±; while in `hold` this sets
-    `startBrightness`; during `fade` it rescales the remaining curve from the
-    new level.
+    `startBrightness` (persisted); during `fade` and `floor` it adjusts a
+    session-only offset on top of the curve (not persisted; the sliders remain
+    the way to change defaults).
 - Control sheet contents: preset buttons (3), brightness slider, hold minutes,
   fade minutes, floor %, hue-shift toggle, clock toggle, "+5 min", "Restart",
   "Off" (black screen, timer stopped; tap to resume last settings).
@@ -176,8 +180,9 @@ celltoys/
 
 - Background outside the lit area is `#000` always (OLED friendly).
 - The control sheet is translucent black over the colour, text in the current
-  preset colour at reduced saturation; no white UI anywhere, ever (white at
-  night is the thing we are avoiding).
+  preset colour at a fixed readable brightness (independent of the fade level,
+  so "Off" is findable at night); no white UI anywhere, ever (white at night
+  is the thing we are avoiding).
 - Controls are large (≥ 44 px targets) for one-thumb use in the dark.
 - Landing page (`index.html`): dark, lists toys as big tiles; just Reading Light
   for now.
