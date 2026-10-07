@@ -30,8 +30,9 @@ nights.
 - Dusk-simulation evidence: hold, then fade ~20–30 min ending at target sleep
   time, hue shifting warmer while dimming.
 - A web page cannot set OS brightness. Users set OS brightness to ~10–25% and
-  the page does fine control. 8-bit channel values below ~20 band visibly, so
-  the floor must not go lower than ~8% of channel scale.
+  the page does fine control. Low 8-bit channel values step coarsely, which
+  only matters in gradients; a flat fill at channel 5 is simply a very dim
+  colour, so the fade tail may step visibly and that is acceptable.
 - iPhone Safari has no Fullscreen API for ordinary pages; "fullscreen" comes
   from Add-to-Home-Screen with `display: standalone`. Screen Wake Lock API
   exists on iOS 16.4+ and Chrome and needs HTTPS plus a user gesture.
@@ -116,10 +117,11 @@ celltoys/
   - Candle `{ r: 255, g: 147, b: 41 }` (~1900 K look)
   - Amber `{ r: 255, g: 64, b: 0 }` (default)
   - Deep Red `{ r: 255, g: 0, b: 0 }`
-- `DEFAULT_SETTINGS`: `{ preset: 'amber', startBrightness: 1.0, floorBrightness: 0.05, holdMinutes: 15, fadeMinutes: 10, hueShift: true, showClock: true }`.
+- `DEFAULT_SETTINGS`: `{ preset: 'amber', startBrightness: 1.0, floorBrightness: 0.2, holdMinutes: 15, fadeMinutes: 10, hueShift: true, showClock: true }`.
 - `brightnessToRgb(preset, brightness)`: `brightness` ∈ [0,1] is perceptual.
-  Channel = `round(c * brightness ** 2.2)`. Values are clamped so no lit channel
-  falls below 20 while brightness > 0 (banding guard); brightness 0 → black.
+  Channel = `round(c * brightness ** 2.2)`. While brightness > 0 the dominant
+  (red) channel is kept ≥ 2 so the screen never renders black unintentionally;
+  brightness 0 → black (Off). Floor 20 % ≈ red channel 7: a faint ember.
 - `fadeBrightness(start, floor, t)`: `t` ∈ [0,1] progress through the fade;
   returns `start * (floor/start) ** t` (exponential in luminance, i.e. linear in
   log-luminance). `t≤0 → start`, `t≥1 → floor`.
@@ -187,11 +189,11 @@ celltoys/
 - Fullscreen unsupported → no-op.
 - localStorage unavailable (private mode) → run with defaults, don't throw.
 - Settings validated on load: numbers clamped to sane ranges (hold 0–120 min,
-  fade 1–60 min, floor 0–50%, brightness 0.05–1).
+  fade 1–60 min, floor 10–50%, start brightness 20–100%).
 
 ## 7. Testing
 
-- **Vitest unit tests** for `light.js` (presets, gamma mapping, banding guard,
+- **Vitest unit tests** for `light.js` (presets, gamma mapping, never-black guard,
   fade endpoints and monotonicity, hue shift timing, timer phases across
   pause/extend), `settings-store.js` (defaults, versioning, bad JSON), and the
   gesture state machine.
@@ -205,10 +207,10 @@ celltoys/
 | Setting            | Default  | Range       |
 |--------------------|----------|-------------|
 | Preset             | Amber    | 3 presets   |
-| Start brightness   | 100 %    | 5–100 %     |
+| Start brightness   | 100 %    | 20–100 %    |
 | Hold               | 15 min   | 0–120 min   |
 | Fade               | 10 min   | 1–60 min    |
-| Floor brightness   | 5 %      | 0–50 %      |
+| Floor brightness   | 20 %     | 10–50 %     |
 | Hue shift in fade  | on       |             |
 | Clock              | on       |             |
 
