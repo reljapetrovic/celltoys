@@ -2,7 +2,7 @@ import { describe, test, expect } from 'vitest';
 import {
   PRESETS, DEFAULT_SETTINGS, LIMITS, clampSettings,
   brightnessToRgb, fadeBrightness, hueShiftPreset,
-  timerState, currentLight, extendSchedule,
+  timerState, currentLight,
   uiColor, renderIntervalMs, resumeSession,
 } from '../reading-light/light.js';
 
@@ -45,8 +45,9 @@ describe('brightnessToRgb', () => {
     expect(brightnessToRgb('red', 0.01)[0]).toBe(2);
     expect(brightnessToRgb('candle', 0.01)[0]).toBe(2);
   });
-  test('floor default is a visible ember', () => {
-    expect(brightnessToRgb('red', DEFAULT_SETTINGS.floorBrightness)[0]).toBeGreaterThanOrEqual(5);
+  test('floor default is a visible night-light, not a near-black ember', () => {
+    expect(brightnessToRgb('red', DEFAULT_SETTINGS.floorBrightness)[0]).toBeGreaterThanOrEqual(20);
+    expect(LIMITS.floorBrightness[1]).toBeGreaterThanOrEqual(0.6);
   });
 });
 
@@ -112,9 +113,20 @@ describe('timerState', () => {
   });
 });
 
-describe('extendSchedule', () => {
-  test('shifts start later', () => {
-    expect(extendSchedule(1000, 5)).toBe(1000 + 5 * MIN);
+describe('timerState with extra hold', () => {
+  const s = clampSettings({ holdMinutes: 15, fadeMinutes: 10 });
+  const t0 = 1_000_000;
+  test('extra hold adds exactly that much remaining time, even early in the session', () => {
+    const before = timerState(s, t0, t0 + 2 * MIN);
+    const after = timerState(s, t0, t0 + 2 * MIN, 5 * MIN);
+    expect(after.remainingMs - before.remainingMs).toBe(5 * MIN);
+    expect(after.phase).toBe('hold');
+  });
+  test('extra hold during the fade moves the fade later', () => {
+    expect(timerState(s, t0, t0 + 19 * MIN).phase).toBe('fade');
+    const st = timerState(s, t0, t0 + 19 * MIN, 5 * MIN);
+    expect(st.phase).toBe('hold');
+    expect(st.remainingMs).toBe(11 * MIN);
   });
 });
 
@@ -124,15 +136,29 @@ describe('currentLight', () => {
     const l = currentLight(s, { phase: 'hold', fadeProgress: 0 });
     expect(l).toMatchObject({ presetId: 'amber', brightness: 1, rgb: [255, 64, 0] });
   });
-  test('fade interpolates and shifts hue after half', () => {
+  test('fade interpolates brightness and names the warmer preset after half', () => {
     const l = currentLight(s, { phase: 'fade', fadeProgress: 0.75 });
     expect(l.presetId).toBe('red');
     expect(l.brightness).toBeCloseTo(fadeBrightness(1, 0.2, 0.75));
   });
-  test('floor uses floor brightness and shifted preset', () => {
+  test('hue shifts smoothly: green channel falls monotonically across the fade, no step', () => {
+    const greens = [0, 0.25, 0.49, 0.5, 0.51, 0.75, 1].map(t => currentLight(s, { phase: 'fade', fadeProgress: t }).rgb[1]);
+    for (let i = 1; i < greens.length; i++) expect(greens[i]).toBeLessThanOrEqual(greens[i - 1]);
+    const step = Math.abs(greens[3] - greens[2]);
+    expect(step).toBeLessThanOrEqual(1);
+    expect(greens[6]).toBe(0);
+  });
+  test('floor uses floor brightness and the fully shifted preset', () => {
     const l = currentLight(s, { phase: 'floor', fadeProgress: 1 });
     expect(l.presetId).toBe('red');
     expect(l.brightness).toBe(0.2);
+    expect(l.rgb[1]).toBe(0);
+  });
+  test('with hue shift off the colour stays on the chosen preset', () => {
+    const off = clampSettings({ ...s, hueShift: false });
+    const l = currentLight(off, { phase: 'fade', fadeProgress: 0.9 });
+    expect(l.presetId).toBe('amber');
+    expect(l.rgb).toEqual(brightnessToRgb('amber', l.brightness));
   });
 });
 
@@ -156,9 +182,9 @@ describe('currentLight with session offset', () => {
 });
 
 describe('uiColor', () => {
-  test('is the preset at a fixed readable brightness, independent of the fade', () => {
-    expect(uiColor('red')).toEqual(brightnessToRgb('red', 0.6));
-    expect(uiColor('amber')[0]).toBeGreaterThan(40);
+  test('is the full preset colour so sheet text stays legible at night', () => {
+    expect(uiColor('red')).toEqual([255, 0, 0]);
+    expect(uiColor('amber')).toEqual([255, 64, 0]);
   });
 });
 
