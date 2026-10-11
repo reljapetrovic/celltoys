@@ -111,7 +111,7 @@ function frame(now) {
     flame = stepFlame(flame, intensity, dt);
     unlitFor = started && !flame.lit ? unlitFor + dt : 0;
     els.relight.hidden = unlitFor < 2;
-    renderer.draw(flame, intensity, now / 1000, dt, { meter: settings.showMeter, safeTop: safeTopPx, reading });
+    renderer.draw(flame, intensity, now / 1000, dt, { meter: settings.showMeter || sheet.visible, safeTop: safeTopPx, reading });
   }
   requestAnimationFrame(frame);
 }

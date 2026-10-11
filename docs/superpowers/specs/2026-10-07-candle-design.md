@@ -134,7 +134,7 @@ enabled.
 - Pointerup on the canvas when unlit → `relight` (bound directly, not via the
   shared tap recogniser, so there is no double-tap delay).
 - Gear button (top-right, dim, inside the safe area) toggles the sheet:
-  sensitivity slider 0.5–3, meter toggle. Sheet auto-hides after 8 s of no
+  sensitivity slider 0.5–10 (default 2), meter toggle; the meter is always shown while the sheet is open. Sheet auto-hides after 8 s of no
   interaction, never while a finger is on it. The meter is drawn below the
   top safe-area inset.
 
@@ -148,7 +148,7 @@ smoke grey at low alpha. UI text in the dim amber from `shared/base.css`.
 
 - Mic denied / insecure context / no `getUserMedia`: flame works, note shown.
 - AudioContext suspended after backgrounding: resume on `visibilitychange`.
-- Settings validated: sensitivity clamped 0.5–3; showMeter boolean.
+- Settings validated: sensitivity clamped 0.5–10; showMeter boolean.
 
 ## 6. Testing
 
