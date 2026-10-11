@@ -65,10 +65,10 @@ Per call:
 1. `rms` = root mean square of `timeData`.
 2. Noise floor: drops immediately to `rms` when `rms` is lower; otherwise
    rises at 0.002 per second. Starts at 0.
-3. `loudness` = clamp((rms − floor − 0.01) / (0.2 / sensitivity), 0, 1).
+3. `loudness` = clamp((rms − floor − 0.005) / (0.08 / sensitivity), 0, 1).
 4. `lowFraction` = Σ 10^(dB/10) for bins below 800 Hz / Σ 10^(dB/10) over all
    bins (bin width = sampleRate / fftSize). 0 when total power is 0.
-5. `gate` = clamp((lowFraction − 0.35) / 0.3, 0, 1).
+5. `gate` = clamp((lowFraction − 0.25) / 0.3, 0, 1).
 6. `raw` = loudness × gate.
 7. `intensity` eases toward `raw` with time constant 0.05 s when rising and
    0.25 s when falling: `intensity += (raw − intensity) × (1 − e^(−dt/τ))`.
@@ -85,7 +85,7 @@ State: `{ lit, lean, size, health, smoke, flare, wind }`.
   eases with τ = 0.08 s. When unlit, target is 0.
 - `size` target = `1 − 0.6 × intensity` (0 when unlit); eases with τ = 0.1 s.
   Relight flare adds `0.5 × flare` to the target.
-- `health`: while lit and intensity > 0.8, drains at 1 per 0.35 s; otherwise
+- `health`: while lit and intensity > 0.7, drains at 1 per 0.3 s; otherwise
   refills at 1 per 0.5 s. Clamped 0..1.
 - When health reaches 0 while lit: `lit = false`, `smoke = 1`.
 - `smoke` decays at 1 per 3 s. `flare` decays at 1 per 0.4 s.

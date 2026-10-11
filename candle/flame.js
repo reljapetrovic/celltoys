@@ -18,7 +18,7 @@ export function stepFlame(s, intensity, dt, rand = Math.random) {
   flare = Math.max(0, flare - dt / 0.4);
   size = ease(size, lit ? 1 - 0.6 * intensity + 0.5 * flare : 0, dt, 0.1);
 
-  if (lit) health = clamp01(intensity > 0.8 ? health - dt / 0.35 : health + dt / 0.5);
+  if (lit) health = clamp01(intensity > 0.7 ? health - dt / 0.3 : health + dt / 0.5);
   if (lit && health <= 0) { lit = false; smoke = 1; }
   smoke = Math.max(0, smoke - dt / 3);
 

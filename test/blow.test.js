@@ -43,6 +43,10 @@ describe('blow detector', () => {
     const d = createBlowDetector({ sampleRate: SR, fftSize: FFT });
     expect(run(d, noiseTime(0.3), blowFreq(), 0.5).intensity).toBeGreaterThan(0.6);
   });
+  test('a soft blow at 0.06 RMS already reads as a strong blow', () => {
+    const d = createBlowDetector({ sampleRate: SR, fftSize: FFT });
+    expect(run(d, noiseTime(0.06), blowFreq(), 0.5).intensity).toBeGreaterThan(0.5);
+  });
   test('loud speech-shaped sound is gated out', () => {
     const d = createBlowDetector({ sampleRate: SR, fftSize: FFT });
     expect(run(d, noiseTime(0.3), speechFreq(), 0.5).intensity).toBeLessThan(0.2);
@@ -61,15 +65,15 @@ describe('blow detector', () => {
   test('sensitivity 2 roughly doubles a weak response', () => {
     const a = createBlowDetector({ sampleRate: SR, fftSize: FFT, sensitivity: 1 });
     const b = createBlowDetector({ sampleRate: SR, fftSize: FFT, sensitivity: 2 });
-    const ia = run(a, noiseTime(0.05), blowFreq(), 0.5).intensity;
-    const ib = run(b, noiseTime(0.05), blowFreq(), 0.5).intensity;
+    const ia = run(a, noiseTime(0.02), blowFreq(), 0.5).intensity;
+    const ib = run(b, noiseTime(0.02), blowFreq(), 0.5).intensity;
     expect(ib / ia).toBeGreaterThan(1.8); expect(ib / ia).toBeLessThan(2.2);
   });
   test('setSensitivity changes later readings', () => {
     const d = createBlowDetector({ sampleRate: SR, fftSize: FFT });
-    const before = run(d, noiseTime(0.05), blowFreq(), 0.5).intensity;
+    const before = run(d, noiseTime(0.02), blowFreq(), 0.5).intensity;
     d.setSensitivity(3);
-    expect(run(d, noiseTime(0.05), blowFreq(), 0.5).intensity).toBeGreaterThan(before * 2);
+    expect(run(d, noiseTime(0.02), blowFreq(), 0.5).intensity).toBeGreaterThan(before * 2);
   });
   test('intensity rises within 0.1 s and decays slower than it rises', () => {
     const d = createBlowDetector({ sampleRate: SR, fftSize: FFT });

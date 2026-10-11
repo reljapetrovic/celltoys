@@ -20,6 +20,9 @@ describe('flame model', () => {
     const s = run(INITIAL_FLAME, 0.9, 0.5);
     expect(s.lit).toBe(false); expect(s.smoke).toBeGreaterThan(0.5);
   });
+  test('a moderate blow at 0.75 extinguishes within half a second', () => {
+    expect(run(INITIAL_FLAME, 0.75, 0.5).lit).toBe(false);
+  });
   test('a short gust does not extinguish', () => {
     expect(run(INITIAL_FLAME, 0.9, 0.2).lit).toBe(true);
   });

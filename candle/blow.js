@@ -6,7 +6,9 @@
 // freqData: Float32Array of dB per bin from getFloatFrequencyData (-Infinity
 // for silent bins). Converted to linear power before summing.
 
-const LOW_HZ = 800, FLOOR_RISE = 0.002, DEAD = 0.01, FULL = 0.2;
+// FULL is the RMS that counts as a full-strength blow at sensitivity 1;
+// phone mics with AGC off put a child's close blow around 0.05-0.15.
+const LOW_HZ = 800, FLOOR_RISE = 0.002, DEAD = 0.005, FULL = 0.08;
 const TAU_RISE = 0.05, TAU_FALL = 0.25;
 const clamp01 = v => Math.min(1, Math.max(0, v));
 
@@ -29,7 +31,7 @@ export function createBlowDetector({ sampleRate, fftSize, sensitivity = 1 }) {
       if (i < lowBins) low += e;
     }
     const lowFraction = total > 0 ? low / total : 0;
-    const gate = clamp01((lowFraction - 0.35) / 0.3);
+    const gate = clamp01((lowFraction - 0.25) / 0.3);
 
     const raw = loudness * gate;
     const tau = raw > intensity ? TAU_RISE : TAU_FALL;
