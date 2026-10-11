@@ -23,7 +23,7 @@ const sessionStore = createStore({
 });
 const $ = id => document.getElementById(id);
 const els = {
-  light: $('light'), clock: $('clock'), paused: $('paused'), hint: $('hint'), sheet: $('sheet'),
+  light: $('light'), clock: $('clock'), paused: $('paused'), hint: $('hint'), intro: $('intro'), sheet: $('sheet'),
   status: $('status'), remaining: $('remaining'),
   brightness: $('brightness'), hold: $('hold'), fade: $('fade'), floor: $('floor'),
   holdOut: $('holdOut'), fadeOut: $('fadeOut'), floorOut: $('floorOut'),
@@ -223,6 +223,17 @@ els.restart.addEventListener('click', restart);
 els.off.addEventListener('click', turnOff);
 
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') render(); });
+
+// ---------- intro card ----------
+// Shown at every launch; fades after a few seconds or on the first touch.
+let introTimer = setTimeout(dismissIntro, 6000);
+function dismissIntro() {
+  clearTimeout(introTimer);
+  if (els.intro.hidden) return;
+  els.intro.classList.add('fade');
+  setTimeout(() => { els.intro.hidden = true; }, 900);
+}
+els.light.addEventListener('pointerdown', dismissIntro, { once: true });
 
 // ---------- start ----------
 saveSession();

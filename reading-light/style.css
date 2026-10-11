@@ -26,3 +26,13 @@ html, body { overflow: hidden; height: 100%; }
   left: 50%; right: auto; transform: translateX(-50%);
   width: max-content; max-width: calc(100vw - 32px);
 }
+#intro {
+  position: fixed; left: 50%; top: 22%; transform: translate(-50%, -50%);
+  width: max-content; max-width: min(360px, calc(100vw - 48px));
+  padding: 18px 22px; border-radius: 18px; text-align: center;
+  pointer-events: none; transition: opacity 0.9s ease;
+}
+#intro strong { display: block; font-size: 24px; margin-bottom: 6px; }
+#intro span { display: block; font-size: 15px; line-height: 1.4; opacity: 0.85; }
+#intro.fade { opacity: 0; }
+#intro[hidden] { display: none; }
