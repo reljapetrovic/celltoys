@@ -104,7 +104,7 @@ function syncControls() {
   for (const b of els.sheet.querySelectorAll('[data-preset]')) {
     b.setAttribute('aria-pressed', String(b.dataset.preset === settings.preset));
   }
-  els.brightness.value = settings.startBrightness;
+  els.brightness.value = effectiveBrightness();
   els.hold.value = settings.holdMinutes; els.holdOut.textContent = settings.holdMinutes;
   els.fade.value = settings.fadeMinutes; els.fadeOut.textContent = settings.fadeMinutes;
   els.floor.value = settings.floorBrightness; els.floorOut.textContent = Math.round(settings.floorBrightness * 100);
@@ -175,14 +175,26 @@ function extend() {
   render();
 }
 
-function adjustBrightness(delta) {
+// Brightness as currently shown, including the session offset.
+function effectiveBrightness() { return currentLight(settings, timer(), offset).brightness; }
+
+// Set what is on screen now. During the hold that is the saved start level;
+// during the fade and night-light it is a session offset on top of the curve,
+// so the slider and the swipe always change the light you are looking at.
+function setBrightness(value, { persistSoon = false } = {}) {
   if (off) return;
-  if (timer().phase === 'hold') {
-    setSettingsSoon({ startBrightness: settings.startBrightness + delta });
+  const t = timer();
+  if (t.phase === 'hold') {
+    if (persistSoon) setSettingsSoon({ startBrightness: value });
+    else saveSettings({ startBrightness: value });
   } else {
-    offset = Math.min(1, Math.max(-1, offset + delta));
+    const base = currentLight(settings, t, 0).brightness;
+    offset = Math.min(1, Math.max(-1, value - base));
   }
   render();
+}
+function adjustBrightness(delta) {
+  setBrightness(effectiveBrightness() + delta, { persistSoon: true });
 }
 
 // ---------- wiring ----------
@@ -211,7 +223,7 @@ els.light.addEventListener('keydown', e => {
 for (const b of els.sheet.querySelectorAll('[data-preset]')) {
   b.addEventListener('click', () => { saveSettings({ preset: b.dataset.preset }); render(); });
 }
-els.brightness.addEventListener('input', () => saveSettings({ startBrightness: Number(els.brightness.value) }));
+els.brightness.addEventListener('input', () => setBrightness(Number(els.brightness.value)));
 els.hold.addEventListener('input', () => saveSettings({ holdMinutes: Number(els.hold.value) }));
 els.fade.addEventListener('input', () => saveSettings({ fadeMinutes: Number(els.fade.value) }));
 els.floor.addEventListener('input', () => saveSettings({ floorBrightness: Number(els.floor.value) }));
