@@ -41,7 +41,7 @@ export function createRenderer(canvas) {
 
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
-  function draw(state, intensity, time, dt, { meter = false, safeTop = 0 } = {}) {
+  function draw(state, intensity, time, dt, { meter = false, safeTop = 0, reading = null } = {}) {
     ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
     const cx = W / 2;
     // Scale with the shorter side so tablets get a bigger candle, not a lost one.
@@ -102,7 +102,12 @@ export function createRenderer(canvas) {
       const mw = Math.min(W - 32, 240);
       const my = safeTop + 16; // below the notch / status bar
       ctx.fillStyle = 'rgba(255,138,64,0.25)'; ctx.fillRect(16, my, mw, 6);
-      ctx.fillStyle = intensity > 0.8 ? '#ff4d1a' : '#ff8a40'; ctx.fillRect(16, my, mw * intensity, 6);
+      ctx.fillStyle = intensity > 0.7 ? '#ff4d1a' : '#ff8a40'; ctx.fillRect(16, my, mw * intensity, 6);
+      // Raw numbers for tuning: what the mic hears, how low-pitched it is, the result.
+      if (reading) {
+        ctx.fillStyle = '#ff8a40'; ctx.font = '12px system-ui, sans-serif'; ctx.textBaseline = 'top';
+        ctx.fillText(`loud ${reading.loudness.toFixed(2)} · low ${reading.lowFraction.toFixed(2)} · blow ${intensity.toFixed(2)} · floor ${reading.floor.toFixed(3)}`, 16, my + 12);
+      }
     }
   }
 

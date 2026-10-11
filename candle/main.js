@@ -28,6 +28,7 @@ let connecting = false;
 let micDenied = false;    // the first attempt failed: no permission or no mic; stop asking
 let timeBuf = null, freqBuf = null;
 let intensity = 0;
+let reading = null;       // last detector result, shown on the meter for tuning
 let last = performance.now();
 let started = false;
 let unlitFor = 0;
@@ -84,6 +85,7 @@ function disconnectMic() {
   mic = null;
   detector = null;
   intensity = 0;
+  reading = null;
 }
 
 async function start() {
@@ -103,12 +105,13 @@ function frame(now) {
   if (document.visibilityState === 'visible') {
     if (detector) {
       mic.readTime(timeBuf); mic.readFreq(freqBuf);
-      intensity = detector.update(timeBuf, freqBuf, dt).intensity;
+      reading = detector.update(timeBuf, freqBuf, dt);
+      intensity = reading.intensity;
     }
     flame = stepFlame(flame, intensity, dt);
     unlitFor = started && !flame.lit ? unlitFor + dt : 0;
     els.relight.hidden = unlitFor < 2;
-    renderer.draw(flame, intensity, now / 1000, dt, { meter: settings.showMeter, safeTop: safeTopPx });
+    renderer.draw(flame, intensity, now / 1000, dt, { meter: settings.showMeter, safeTop: safeTopPx, reading });
   }
   requestAnimationFrame(frame);
 }

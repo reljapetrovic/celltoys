@@ -65,11 +65,12 @@ Per call:
 1. `rms` = root mean square of `timeData`.
 2. Noise floor: drops immediately to `rms` when `rms` is lower; otherwise
    rises at 0.002 per second. Starts at 0.
-3. `loudness` = clamp((rms − floor − 0.005) / (0.08 / sensitivity), 0, 1).
+3. `loudness` = clamp((rms − floor − 0.003) / (0.03 / sensitivity), 0, 1).
 4. `lowFraction` = Σ 10^(dB/10) for bins below 800 Hz / Σ 10^(dB/10) over all
    bins (bin width = sampleRate / fftSize). 0 when total power is 0.
-5. `gate` = clamp((lowFraction − 0.25) / 0.3, 0, 1).
-6. `raw` = loudness × gate.
+5. `gate` = clamp((lowFraction − 0.15) / 0.3, 0, 1).
+6. `raw` = loudness × (0.35 + 0.65 × gate), so a loud non-blow sound can flicker
+   the flame but never reach the 0.7 extinguish level.
 7. `intensity` eases toward `raw` with time constant 0.05 s when rising and
    0.25 s when falling: `intensity += (raw − intensity) × (1 − e^(−dt/τ))`.
 
