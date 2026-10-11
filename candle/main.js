@@ -2,37 +2,37 @@ import { createBlowDetector } from './blow.js';
 import { INITIAL_FLAME, stepFlame, relight } from './flame.js';
 import { startMic } from './mic.js';
 import { createRenderer } from './render.js';
+import { DEFAULT_SETTINGS, clampSettings } from './settings.js';
 import { createStore } from '../shared/settings-store.js';
+import { attachSheet, createToast } from '../shared/sheet.js';
 import { keepAwake } from '../shared/wake-lock.js';
 import { requestFullscreen } from '../shared/fullscreen.js';
 
-const store = createStore({ key: 'celltoys.candle', version: 1, defaults: { sensitivity: 1, showMeter: false } });
-const clampSettings = s => ({
-  sensitivity: Math.min(3, Math.max(0.5, Number(s.sensitivity) || 1)),
-  showMeter: s.showMeter === true,
-});
+const store = createStore({ key: 'celltoys.candle', version: 1, defaults: DEFAULT_SETTINGS });
 let settings = clampSettings(store.load());
 
 const $ = id => document.getElementById(id);
 const els = {
-  scene: $('scene'), start: $('start'), note: $('note'), gear: $('gear'), sheet: $('sheet'),
-  sensitivity: $('sensitivity'), sensOut: $('sensOut'), meter: $('meter'),
+  scene: $('scene'), probe: $('safe-probe'), start: $('start'), note: $('note'), relight: $('relight'),
+  gear: $('gear'), sheet: $('sheet'), sensitivity: $('sensitivity'), sensOut: $('sensOut'), meter: $('meter'),
 };
 
 const renderer = createRenderer(els.scene);
+const toast = createToast(els.note);
+const sheet = attachSheet(els.sheet, { hideAfterMs: 8000 });
+
 let flame = { ...INITIAL_FLAME, lit: false, size: 0 };
 let detector = null;
 let mic = null;
+let connecting = false;
 let timeBuf = null, freqBuf = null;
 let intensity = 0;
 let last = performance.now();
 let started = false;
-let sheetTimer = null;
+let unlitFor = 0;
 
-function showNote(text, ms = 6000) {
-  els.note.textContent = text; els.note.hidden = false;
-  setTimeout(() => { els.note.hidden = true; }, ms);
-}
+const MIN_FRAME_MS = 15; // cap at ~60 fps; 120 Hz screens gain nothing here
+function safeTop() { return parseFloat(getComputedStyle(els.probe).paddingTop) || 0; }
 
 function saveSettings(partial) {
   settings = clampSettings({ ...settings, ...partial });
@@ -46,6 +46,39 @@ function syncControls() {
   els.meter.setAttribute('aria-pressed', String(settings.showMeter));
 }
 
+// ---------- microphone lifecycle ----------
+// Capture runs only while the page is visible; it is released when hidden
+// (no hot mic in the background) and reconnected on return or on the next tap.
+async function connectMic(reason) {
+  if (mic || connecting) return;
+  connecting = true;
+  try {
+    const m = await startMic({
+      onEnded() {
+        if (mic !== m) return;
+        disconnectMic();
+        toast.show('Microphone stopped. Tap to reconnect.', 0);
+      },
+    });
+    mic = m;
+    detector = createBlowDetector({ sampleRate: m.sampleRate, fftSize: m.fftSize, sensitivity: settings.sensitivity });
+    timeBuf = new Float32Array(m.fftSize);
+    freqBuf = new Float32Array(m.fftSize / 2);
+    toast.hide();
+  } catch {
+    toast.show(reason === 'reconnect'
+      ? 'Tap to reconnect the microphone.'
+      : 'Blowing needs the microphone. The candle still flickers.');
+  }
+  connecting = false;
+}
+function disconnectMic() {
+  mic?.stop();
+  mic = null;
+  detector = null;
+  intensity = 0;
+}
+
 async function start() {
   if (started) return;
   started = true;
@@ -53,18 +86,12 @@ async function start() {
   keepAwake();
   requestFullscreen();
   flame = relight(flame);
-  try {
-    mic = await startMic();
-    detector = createBlowDetector({ sampleRate: mic.sampleRate, fftSize: mic.fftSize, sensitivity: settings.sensitivity });
-    timeBuf = new Float32Array(mic.fftSize);
-    freqBuf = new Float32Array(mic.fftSize / 2);
-  } catch {
-    showNote('Blowing needs the microphone. The candle still flickers.');
-  }
+  connectMic('first');
 }
 
 function frame(now) {
-  const dt = Math.min(0.05, (now - last) / 1000);
+  if (now - last < MIN_FRAME_MS) { requestAnimationFrame(frame); return; }
+  const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
   last = now;
   if (document.visibilityState === 'visible') {
     if (detector) {
@@ -72,26 +99,30 @@ function frame(now) {
       intensity = detector.update(timeBuf, freqBuf, dt).intensity;
     }
     flame = stepFlame(flame, intensity, dt);
-    renderer.draw(flame, intensity, now / 1000, dt, { meter: settings.showMeter });
+    unlitFor = started && !flame.lit ? unlitFor + dt : 0;
+    els.relight.hidden = unlitFor < 2;
+    renderer.draw(flame, intensity, now / 1000, dt, { meter: settings.showMeter, safeTop: safeTop() });
   }
   requestAnimationFrame(frame);
 }
 
-// ---------- sheet ----------
-function armSheetHide() { clearTimeout(sheetTimer); sheetTimer = setTimeout(() => { els.sheet.hidden = true; }, 5000); }
-els.gear.addEventListener('click', () => { els.sheet.hidden = !els.sheet.hidden; if (!els.sheet.hidden) armSheetHide(); });
-els.sheet.addEventListener('input', armSheetHide);
-els.sheet.addEventListener('pointerdown', armSheetHide);
+// ---------- wiring ----------
+els.gear.addEventListener('click', () => sheet.toggle());
 els.sensitivity.addEventListener('input', () => saveSettings({ sensitivity: Number(els.sensitivity.value) }));
 els.meter.addEventListener('click', () => saveSettings({ showMeter: !settings.showMeter }));
 
-// ---------- gestures ----------
 els.start.addEventListener('pointerup', start, { once: true });
 // Relight on pointerup directly: no double-tap window, so no 300 ms lag.
 els.scene.addEventListener('pointerup', () => {
   if (!started) return;
-  mic?.resume();
-  if (!flame.lit) flame = relight(flame);
+  if (!mic) connectMic('reconnect'); else mic.resume();
+  if (!flame.lit) { flame = relight(flame); unlitFor = 0; els.relight.hidden = true; }
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (!started) return;
+  if (document.visibilityState === 'hidden') disconnectMic();
+  else connectMic('reconnect');
 });
 
 window.addEventListener('resize', () => renderer.resize());
