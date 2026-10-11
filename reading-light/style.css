@@ -7,9 +7,10 @@ html, body { overflow: hidden; height: 100%; }
 #clock {
   position: fixed; right: max(16px, env(safe-area-inset-right));
   bottom: max(16px, env(safe-area-inset-bottom));
-  font-size: 22px; font-variant-numeric: tabular-nums;
+  font-size: 20px; font-variant-numeric: tabular-nums;
   pointer-events: none; letter-spacing: 0.04em;
 }
+#clock:empty { display: none; }
 /* Small dark pill so text reads on any light colour, bright or ember. */
 .pill, .toast {
   background: rgba(0, 0, 0, 0.65); color: var(--fg);

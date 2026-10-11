@@ -1,5 +1,5 @@
 import {
-  DEFAULT_SETTINGS, clampSettings, timerState, currentLight,
+  DEFAULT_SETTINGS, clampSettings, timerState, currentLight, extendHold,
   uiColor, renderIntervalMs, resumeSession,
 } from './light.js';
 import { createStore } from '../shared/settings-store.js';
@@ -41,8 +41,12 @@ let extraHoldMs = resumed ? savedExtra : 0;  // "+5 min" presses this session
 let off = false;
 let offset = 0;           // session-only swipe adjustment during fade/floor
 let awake = null;
-let awakePromise = null;
+let awakeGen = 0;          // generation token: only the latest keepAwake() result counts
+let awakeTries = 0;
+let awakeHintShown = false;
 let saveTimer = null;
+const MAX_AWAKE_TRIES = 4;
+const firstRun = !store.load().seenHint;
 
 const toast = createToast(els.hint);
 const sheet = attachSheet(els.sheet, { hideAfterMs: 8000, onShow: () => syncControls() });
@@ -69,7 +73,7 @@ const rgbCss = ([r, g, b], a = 1) => (a === 1 ? `rgb(${r}, ${g}, ${b})` : `rgba(
 
 function render() {
   const t = timer();
-  const { presetId, brightness, rgb } = currentLight(settings, t, offset);
+  const { presetId, rgb } = currentLight(settings, t, offset);
   const ui = uiColor(presetId);
   document.documentElement.style.setProperty('--fg', rgbCss(ui));
   document.documentElement.style.setProperty('--fg-dim', rgbCss(ui, 0.7));
@@ -80,9 +84,6 @@ function render() {
     return;
   }
   els.light.style.background = rgbCss(rgb);
-  // The clock must contrast with the light itself: dark on a bright surface,
-  // dim preset colour on an ember.
-  els.clock.style.color = brightness > 0.5 ? 'rgba(0, 0, 0, 0.45)' : rgbCss(ui, 0.45);
   els.status.textContent = pausedAt ? 'Paused' : PHASE_LABEL[t.phase];
   els.remaining.textContent = t.phase === 'floor' ? '' : `${Math.ceil(t.remainingMs / MIN_MS)} min left`;
   renderClock();
@@ -115,23 +116,32 @@ function syncControls() {
 
 // ---------- wake lock ----------
 // Chrome grants the Screen Wake Lock without a gesture; Safari gates it on
-// user activation. Try at load, retry on the first tap, and only count the
-// real API as settled (the video fallback may or may not keep iOS awake).
+// user activation. Try at load and again on taps until the real API has
+// succeeded (the video fallback may or may not keep iOS awake). Each call
+// issues a fresh request synchronously, so a call from pointerup runs inside
+// the activation; a generation token keeps a slow earlier attempt from
+// overriding a later, better one.
 function ensureAwake() {
   if (awake?.via === 'api') return Promise.resolve(true);
-  if (!awakePromise) {
-    awakePromise = (async () => {
-      awake?.release();
-      awake = await keepAwake();
-      awakePromise = null;
-      return awake.via === 'api';
-    })();
-  }
-  return awakePromise;
+  if (awakeTries >= MAX_AWAKE_TRIES) return Promise.resolve(false);
+  awakeTries++;
+  const gen = ++awakeGen;
+  return keepAwake().then(next => {
+    if (gen !== awakeGen) { next.release(); return awake?.via === 'api'; }
+    awake?.release();
+    awake = next;
+    return next.via === 'api';
+  });
+}
+function awakeHint(text) {
+  if (awakeHintShown) return;
+  awakeHintShown = true;
+  toast.show(text);
 }
 function releaseAwake() {
   awake?.release();
   awake = null;
+  awakeTries = 0;
 }
 
 // ---------- actions ----------
@@ -147,7 +157,7 @@ function togglePause() {
 function restart() {
   off = false; pausedAt = null; startedAt = Date.now(); offset = 0; extraHoldMs = 0;
   saveSession();
-  ensureAwake();
+  ensureAwake().then(ok => { if (!ok) awakeHint('Keep the screen awake in phone settings'); });
   syncControls();
   render();
 }
@@ -159,7 +169,7 @@ function turnOff() {
   render();
 }
 function extend() {
-  extraHoldMs += 5 * MIN_MS;
+  extraHoldMs = extendHold(settings, timer(), extraHoldMs, 5);
   saveSession();
   sheet.activity();
   render();
@@ -185,11 +195,18 @@ attachGestures(els.light, {
   onSwipe({ dy }) { adjustBrightness(-dy / 300); },
 });
 // pointerup (not pointerdown) counts as a user activation for fullscreen and,
-// on Safari, for the wake lock.
+// on Safari, for the wake lock. Every tap retries until the API has succeeded.
 els.light.addEventListener('pointerup', () => {
-  ensureAwake().then(ok => { if (!ok) toast.show('Keep the screen awake in phone settings'); });
+  if (awake?.via !== 'api') {
+    ensureAwake().then(ok => { if (!ok) awakeHint('Keep the screen awake in phone settings'); });
+  }
   requestFullscreen();
-}, { once: true });
+});
+els.light.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  e.preventDefault();
+  if (off) restart(); else sheet.toggle();
+});
 
 for (const b of els.sheet.querySelectorAll('[data-preset]')) {
   b.addEventListener('click', () => { saveSettings({ preset: b.dataset.preset }); render(); });
@@ -212,11 +229,13 @@ saveSession();
 syncControls();
 render();
 tick();
-ensureAwake().then(ok => { if (!ok) toast.show('Tap the screen once to keep it awake'); });
+// On first launch the discoverability toast already asks for a tap, which also
+// satisfies Safari's wake-lock activation, so the wake hint is skipped then.
+ensureAwake().then(ok => { if (!ok && !firstRun) awakeHint('Tap the screen once to keep it awake'); });
 
 // First launch: open the controls so they are discoverable, with the one tip
 // the page cannot act on itself.
-if (!store.load().seenHint) {
+if (firstRun) {
   sheet.show();
   toast.show('Tap the screen any time for these controls. Set phone brightness to about 15 %.', 12000);
   store.save({ seenHint: true });

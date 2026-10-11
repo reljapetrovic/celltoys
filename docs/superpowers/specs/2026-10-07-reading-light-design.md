@@ -130,10 +130,12 @@ celltoys/
   `t ≥ 0.5`, clamped at Deep Red; identity when hueShift is off. Used for the
   UI colour only; the light itself blends linearly between the two presets
   across the whole fade so there is no visible colour step.
-- `timerState(settings, startedAt, now, pausedTotalMs)`: returns
+- `timerState(settings, startedAt, now, extraHoldMs)`: returns
   `{ phase: 'hold' | 'fade' | 'floor', fadeProgress, remainingMs }` computed purely
   from timestamps, so lock-screen or app switching never desyncs it.
-- `extendHold(timer, minutes)`: shifts the schedule later by `minutes`.
+- `extendHold(settings, timer, extraHoldMs, minutes)`: during the hold adds
+  `minutes` to it; during the fade or night-light gives `minutes` of full light
+  from now, then the fade again.
 
 **`reading-light/main.js`**
 
@@ -157,9 +159,9 @@ celltoys/
   fade minutes, floor %, hue-shift toggle, clock toggle, "+5 min", "Restart",
   "Off" (black screen, timer stopped; tap to resume last settings).
 - Status line in the sheet: phase and remaining minutes.
-- Clock: `HH:MM` bottom-right, `font-variant-numeric: tabular-nums`, drawn
-  dark on a bright light and in the dim preset colour on an ember so it is
-  always visible (the light colour itself would be invisible against the light).
+- Clock: `HH:MM` bottom-right in a small dark pill (preset colour on black), so
+  it reads on any light level; the light colour itself would be invisible
+  against the light.
 - A "Paused · double-tap to resume" pill is shown whenever the fade is paused.
 - Wake lock requested at load (Chrome needs no gesture), retried on the first
   tap (Safari gates it on user activation; a hint says to tap once), and

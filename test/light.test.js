@@ -2,7 +2,7 @@ import { describe, test, expect } from 'vitest';
 import {
   PRESETS, DEFAULT_SETTINGS, LIMITS, clampSettings,
   brightnessToRgb, fadeBrightness, hueShiftPreset,
-  timerState, currentLight,
+  timerState, currentLight, extendHold,
   uiColor, renderIntervalMs, resumeSession,
 } from '../reading-light/light.js';
 
@@ -110,6 +110,33 @@ describe('timerState', () => {
   });
   test('now before start is treated as elapsed 0', () => {
     expect(timerState(s, t0, t0 - 5000).elapsedMs).toBe(0);
+  });
+});
+
+describe('extendHold', () => {
+  const s = clampSettings({ holdMinutes: 15, fadeMinutes: 10 });
+  const t0 = 1_000_000;
+  test('during hold it adds five minutes', () => {
+    const extra = extendHold(s, timerState(s, t0, t0 + 2 * MIN), 0, 5);
+    expect(extra).toBe(5 * MIN);
+    expect(timerState(s, t0, t0 + 2 * MIN, extra).remainingMs).toBe(28 * MIN);
+  });
+  test('during the fade it gives five more bright minutes, then the fade again', () => {
+    const extra = extendHold(s, timerState(s, t0, t0 + 20 * MIN), 0, 5);
+    const st = timerState(s, t0, t0 + 20 * MIN, extra);
+    expect(st.phase).toBe('hold');
+    expect(st.remainingMs).toBe(15 * MIN);
+  });
+  test('in the night-light phase it also gives five bright minutes', () => {
+    const extra = extendHold(s, timerState(s, t0, t0 + 60 * MIN), 0, 5);
+    const st = timerState(s, t0, t0 + 60 * MIN, extra);
+    expect(st.phase).toBe('hold');
+    expect(st.remainingMs).toBe(15 * MIN);
+  });
+  test('pressing twice accumulates', () => {
+    const t = timerState(s, t0, t0 + 2 * MIN);
+    const extra = extendHold(s, t, extendHold(s, t, 0, 5), 5);
+    expect(extra).toBe(10 * MIN);
   });
 });
 

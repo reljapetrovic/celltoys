@@ -95,6 +95,14 @@ export function timerState(settings, startedAt, now, extraHoldMs = 0) {
   return { phase: 'floor', fadeProgress: 1, remainingMs: 0, elapsedMs };
 }
 
+// "+5 min": during the hold it lengthens the hold; during the fade or the
+// night-light it gives `minutes` of full light from now, then the fade again.
+export function extendHold(settings, timer, extraHoldMs, minutes) {
+  const addMs = minutes * MIN_MS;
+  if (timer.phase === 'hold') return extraHoldMs + addMs;
+  return timer.elapsedMs - settings.holdMinutes * MIN_MS + addMs;
+}
+
 // Session-only brightness floor/ceiling for swipe offsets outside the hold phase.
 const OFFSET_MIN = 0.02;
 

@@ -47,8 +47,10 @@ export function attachSheet(el, { hideAfterMs, onShow } = {}) {
     onHide() { el.hidden = true; },
   });
   el.addEventListener('pointerdown', () => c.pointer(true));
-  el.addEventListener('pointerup', () => c.pointer(false));
-  el.addEventListener('pointercancel', () => c.pointer(false));
+  // A mouse or pen can lift outside the sheet (touch has implicit capture), so
+  // the release is tracked on the window.
+  window.addEventListener('pointerup', () => c.pointer(false));
+  window.addEventListener('pointercancel', () => c.pointer(false));
   el.addEventListener('input', () => c.activity());
   el.addEventListener('click', () => c.activity());
   return c;

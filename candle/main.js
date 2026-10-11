@@ -25,6 +25,7 @@ let flame = { ...INITIAL_FLAME, lit: false, size: 0 };
 let detector = null;
 let mic = null;
 let connecting = false;
+let micDenied = false;    // the first attempt failed: no permission or no mic; stop asking
 let timeBuf = null, freqBuf = null;
 let intensity = 0;
 let last = performance.now();
@@ -32,7 +33,8 @@ let started = false;
 let unlitFor = 0;
 
 const MIN_FRAME_MS = 15; // cap at ~60 fps; 120 Hz screens gain nothing here
-function safeTop() { return parseFloat(getComputedStyle(els.probe).paddingTop) || 0; }
+let safeTopPx = 0;
+function measureSafeTop() { safeTopPx = parseFloat(getComputedStyle(els.probe).paddingTop) || 0; }
 
 function saveSettings(partial) {
   settings = clampSettings({ ...settings, ...partial });
@@ -50,7 +52,7 @@ function syncControls() {
 // Capture runs only while the page is visible; it is released when hidden
 // (no hot mic in the background) and reconnected on return or on the next tap.
 async function connectMic(reason) {
-  if (mic || connecting) return;
+  if (mic || connecting || micDenied) return;
   connecting = true;
   try {
     const m = await startMic({
@@ -60,15 +62,20 @@ async function connectMic(reason) {
         toast.show('Microphone stopped. Tap to reconnect.', 0);
       },
     });
+    if (document.visibilityState === 'hidden') { m.stop(); connecting = false; return; } // went to background meanwhile
     mic = m;
+    m.resume();
     detector = createBlowDetector({ sampleRate: m.sampleRate, fftSize: m.fftSize, sensitivity: settings.sensitivity });
     timeBuf = new Float32Array(m.fftSize);
     freqBuf = new Float32Array(m.fftSize / 2);
     toast.hide();
   } catch {
-    toast.show(reason === 'reconnect'
-      ? 'Tap to reconnect the microphone.'
-      : 'Blowing needs the microphone. The candle still flickers.');
+    if (reason === 'first') {
+      micDenied = true;
+      toast.show('Blowing needs the microphone. The candle still flickers.');
+    } else {
+      toast.show('Tap to reconnect the microphone.', 0);
+    }
   }
   connecting = false;
 }
@@ -101,7 +108,7 @@ function frame(now) {
     flame = stepFlame(flame, intensity, dt);
     unlitFor = started && !flame.lit ? unlitFor + dt : 0;
     els.relight.hidden = unlitFor < 2;
-    renderer.draw(flame, intensity, now / 1000, dt, { meter: settings.showMeter, safeTop: safeTop() });
+    renderer.draw(flame, intensity, now / 1000, dt, { meter: settings.showMeter, safeTop: safeTopPx });
   }
   requestAnimationFrame(frame);
 }
@@ -112,6 +119,7 @@ els.sensitivity.addEventListener('input', () => saveSettings({ sensitivity: Numb
 els.meter.addEventListener('click', () => saveSettings({ showMeter: !settings.showMeter }));
 
 els.start.addEventListener('pointerup', start, { once: true });
+els.start.addEventListener('click', start); // keyboard activation; start() is idempotent
 // Relight on pointerup directly: no double-tap window, so no 300 ms lag.
 els.scene.addEventListener('pointerup', () => {
   if (!started) return;
@@ -125,7 +133,8 @@ document.addEventListener('visibilitychange', () => {
   else connectMic('reconnect');
 });
 
-window.addEventListener('resize', () => renderer.resize());
+window.addEventListener('resize', () => { renderer.resize(); measureSafeTop(); });
 renderer.resize();
+measureSafeTop();
 syncControls();
 requestAnimationFrame(frame);

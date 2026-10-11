@@ -22,6 +22,7 @@ export async function startMic({ onEnded } = {}) {
     throw err;
   }
 
+  ctx.resume().catch(() => {}); // the context may have suspended during the prompt
   const source = ctx.createMediaStreamSource(stream);
   const analyser = ctx.createAnalyser();
   analyser.fftSize = 1024;
