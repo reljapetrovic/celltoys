@@ -60,3 +60,21 @@ describe('recognizer', () => {
     expect(h.onTap).not.toHaveBeenCalled();
   });
 });
+
+describe('recognizer cancel', () => {
+  test('a cancelled pointer never becomes a tap', () => {
+    const { r, h, timers } = setup();
+    r.down(10, 10, 0);
+    r.cancel();
+    timers.flush();
+    expect(h.onTap).not.toHaveBeenCalled();
+    expect(h.onDoubleTap).not.toHaveBeenCalled();
+  });
+  test('a tap after a cancel is a fresh single tap', () => {
+    const { r, h, timers } = setup();
+    r.down(10, 10, 0); r.cancel();
+    r.down(10, 10, 100); r.up(10, 10, 150); timers.flush();
+    expect(h.onTap).toHaveBeenCalledTimes(1);
+    expect(h.onDoubleTap).not.toHaveBeenCalled();
+  });
+});
