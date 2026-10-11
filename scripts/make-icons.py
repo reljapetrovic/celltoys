@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Generate reading-light PNG icons without external libraries."""
+"""Generate PWA icons (180, 192, 512 px) without external libraries.
+
+Usage: make-icons.py <outdir> [ember|flame]
+  ember: amber-to-red glow disc (Reading Light)
+  flame: teardrop flame (Candle)
+"""
 import struct, zlib, sys, os, math
 
 def png(width, height, pixels):
@@ -54,7 +59,7 @@ out = sys.argv[1]
 style = sys.argv[2] if len(sys.argv) > 2 else 'ember'
 make = flame_icon if style == 'flame' else icon
 os.makedirs(out, exist_ok=True)
-for s in (180, 512):
+for s in (180, 192, 512):
     with open(os.path.join(out, f'icon-{s}.png'), 'wb') as f:
         f.write(make(s))
 print('ok')

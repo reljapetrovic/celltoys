@@ -3,27 +3,26 @@ html, body { overflow: hidden; height: 100%; }
   position: fixed; inset: 0; background: #000;
   touch-action: none; user-select: none; -webkit-user-select: none;
 }
+#light:focus { outline: none; }
 #clock {
   position: fixed; right: max(16px, env(safe-area-inset-right));
   bottom: max(16px, env(safe-area-inset-bottom));
-  font-size: 22px; font-variant-numeric: tabular-nums; opacity: 0.35;
+  font-size: 20px; font-variant-numeric: tabular-nums;
   pointer-events: none; letter-spacing: 0.04em;
 }
-#hint {
-  position: fixed; top: max(24px, env(safe-area-inset-top)); left: 16px; right: 16px;
-  text-align: center; color: var(--fg-dim); font-size: 15px; pointer-events: none;
+#clock:empty { display: none; }
+/* Small dark pill so text reads on any light colour, bright or ember. */
+.pill, .toast {
+  background: rgba(0, 0, 0, 0.65); color: var(--fg);
+  padding: 8px 14px; border-radius: 14px;
 }
-#sheet {
-  position: fixed; left: 0; right: 0; bottom: 0;
-  padding: 16px 16px max(16px, env(safe-area-inset-bottom));
-  background: rgba(0, 0, 0, 0.78); backdrop-filter: blur(6px);
-  border-top: 1px solid var(--fg-dim); border-radius: 20px 20px 0 0;
-  max-height: 85vh; overflow-y: auto;
+#paused {
+  position: fixed; left: max(16px, env(safe-area-inset-left));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  font-size: 15px; pointer-events: none;
 }
-#sheet[hidden] { display: none; }
-.row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
-.row > span { flex: 0 0 150px; }
-.row input[type="range"] { flex: 1; min-height: 44px; accent-color: var(--fg); border: 0; padding: 0; }
-.status { justify-content: space-between; color: var(--fg-dim); font-size: 15px; }
-.presets button, .toggles button, .actions button { flex: 1; }
-.help { color: var(--fg-dim); font-size: 13px; text-align: center; margin-top: 4px; }
+#paused[hidden] { display: none; }
+.toast {
+  left: 50%; right: auto; transform: translateX(-50%);
+  width: max-content; max-width: calc(100vw - 32px);
+}

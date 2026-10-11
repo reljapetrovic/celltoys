@@ -60,7 +60,15 @@ export function createRecognizer({
     pendingTap = schedule(() => { pendingTap = null; onTap(); }, doubleTapMs);
   }
 
-  return { down, move, up };
+  // A system-cancelled pointer (scroll takeover, incoming call) is neither a
+  // tap nor a swipe: forget it without scheduling anything.
+  function cancelPointer() {
+    start = null;
+    swiping = false;
+    moved = false;
+  }
+
+  return { down, move, up, cancel: cancelPointer };
 }
 
 export function attachGestures(el, handlers) {
@@ -69,14 +77,15 @@ export function attachGestures(el, handlers) {
   const onDown = e => { if (e.isPrimary) r.down(e.clientX, e.clientY, now()); };
   const onMove = e => { if (e.isPrimary) r.move(e.clientX, e.clientY, now()); };
   const onUp = e => { if (e.isPrimary) r.up(e.clientX, e.clientY, now()); };
+  const onCancel = e => { if (e.isPrimary) r.cancel(); };
   el.addEventListener('pointerdown', onDown);
   el.addEventListener('pointermove', onMove);
   el.addEventListener('pointerup', onUp);
-  el.addEventListener('pointercancel', onUp);
+  el.addEventListener('pointercancel', onCancel);
   return () => {
     el.removeEventListener('pointerdown', onDown);
     el.removeEventListener('pointermove', onMove);
     el.removeEventListener('pointerup', onUp);
-    el.removeEventListener('pointercancel', onUp);
+    el.removeEventListener('pointercancel', onCancel);
   };
 }

@@ -117,20 +117,25 @@ celltoys/
   - Candle `{ r: 255, g: 147, b: 41 }` (~1900 K look)
   - Amber `{ r: 255, g: 64, b: 0 }` (default)
   - Deep Red `{ r: 255, g: 0, b: 0 }`
-- `DEFAULT_SETTINGS`: `{ preset: 'amber', startBrightness: 1.0, floorBrightness: 0.2, holdMinutes: 15, fadeMinutes: 10, hueShift: true, showClock: true }`.
+- `DEFAULT_SETTINGS`: `{ preset: 'amber', startBrightness: 1.0, floorBrightness: 0.35, holdMinutes: 15, fadeMinutes: 10, hueShift: true, showClock: true }`.
 - `brightnessToRgb(preset, brightness)`: `brightness` ∈ [0,1] is perceptual.
   Channel = `round(c * brightness ** 2.2)`. While brightness > 0 the dominant
   (red) channel is kept ≥ 2 so the screen never renders black unintentionally;
-  brightness 0 → black (Off). Floor 20 % ≈ red channel 7: a faint ember.
+  brightness 0 → black (Off). Floor 35 % ≈ red channel 25: a faint night-light
+  (20 % rendered as channel 7, indistinguishable from off on a phone).
 - `fadeBrightness(start, floor, t)`: `t` ∈ [0,1] progress through the fade;
   returns `start * (floor/start) ** t` (exponential in luminance, i.e. linear in
   log-luminance). `t≤0 → start`, `t≥1 → floor`.
 - `hueShiftPreset(preset, t)`: returns the preset one step warmer once
-  `t ≥ 0.5`, clamped at Deep Red; identity when hueShift is off.
-- `timerState(settings, startedAt, now, pausedTotalMs)`: returns
+  `t ≥ 0.5`, clamped at Deep Red; identity when hueShift is off. Used for the
+  UI colour only; the light itself blends linearly between the two presets
+  across the whole fade so there is no visible colour step.
+- `timerState(settings, startedAt, now, extraHoldMs)`: returns
   `{ phase: 'hold' | 'fade' | 'floor', fadeProgress, remainingMs }` computed purely
   from timestamps, so lock-screen or app switching never desyncs it.
-- `extendHold(timer, minutes)`: shifts the schedule later by `minutes`.
+- `extendHold(settings, timer, extraHoldMs, minutes)`: during the hold adds
+  `minutes` to it; during the fade or night-light gives `minutes` of full light
+  from now, then the fade again.
 
 **`reading-light/main.js`**
 
@@ -143,7 +148,8 @@ celltoys/
   (only the fade changes visibly); on `visibilitychange` back to visible,
   recompute at once (no drift). "Off" releases the wake lock.
 - Gestures (via `shared/gestures.js`):
-  - single tap → toggle control sheet (auto-hides after 4 s of no interaction)
+  - single tap → toggle control sheet (auto-hides after 8 s of no interaction,
+    never while a finger is on it)
   - double tap → pause/resume fade
   - vertical swipe → adjust current brightness ±; while in `hold` this sets
     `startBrightness` (persisted); during `fade` and `floor` it adjusts a
@@ -153,8 +159,13 @@ celltoys/
   fade minutes, floor %, hue-shift toggle, clock toggle, "+5 min", "Restart",
   "Off" (black screen, timer stopped; tap to resume last settings).
 - Status line in the sheet: phase and remaining minutes.
-- Clock: `HH:MM` in the current colour at ~35% opacity, bottom-right, `font-variant-numeric: tabular-nums`.
-- Wake lock acquired on first user gesture and re-acquired on `visibilitychange`.
+- Clock: `HH:MM` bottom-right in a small dark pill (preset colour on black), so
+  it reads on any light level; the light colour itself would be invisible
+  against the light.
+- A "Paused · double-tap to resume" pill is shown whenever the fade is paused.
+- Wake lock requested at load (Chrome needs no gesture), retried on the first
+  tap (Safari gates it on user activation; a hint says to tap once), and
+  re-acquired on `visibilitychange`.
 - Fullscreen requested on first gesture where supported (Android/laptop).
 - All setting changes save immediately.
 
@@ -179,10 +190,11 @@ celltoys/
 ## 5. Visual design
 
 - Background outside the lit area is `#000` always (OLED friendly).
-- The control sheet is translucent black over the colour, text in the current
-  preset colour at a fixed readable brightness (independent of the fade level,
-  so "Off" is findable at night); no white UI anywhere, ever (white at night
-  is the thing we are avoiding).
+- The control sheet is 90 % black over the colour, text in the full current
+  preset colour (independent of the fade level, so "Off" is findable at night;
+  anything dimmer fails 4.5:1 contrast); sliders are custom-styled in the same
+  colour; no white UI anywhere, ever (white at night is the thing we are
+  avoiding). Action buttons wrap into a 2x2 grid; landscape uses two columns.
 - Controls are large (≥ 44 px targets) for one-thumb use in the dark.
 - Landing page (`index.html`): dark, lists toys as big tiles; just Reading Light
   for now.
@@ -215,9 +227,9 @@ celltoys/
 | Start brightness   | 100 %    | 20–100 %    |
 | Hold               | 15 min   | 0–120 min   |
 | Fade               | 10 min   | 1–60 min    |
-| Floor brightness   | 20 %     | 10–50 %     |
+| Floor brightness   | 35 %     | 10–60 %     |
 | Hue shift in fade  | on       |             |
 | Clock              | on       |             |
 
-Tip shown once on first launch: "Set your phone brightness to about 15 %, then
-adjust here."
+On first launch the control sheet opens by itself and a toast says: "Tap the
+screen any time for these controls. Set phone brightness to about 15 %."

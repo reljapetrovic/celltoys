@@ -39,16 +39,20 @@ export function createRenderer(canvas) {
     }
   }
 
-  function draw(state, intensity, time, dt, { meter = false } = {}) {
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+  function draw(state, intensity, time, dt, { meter = false, safeTop = 0 } = {}) {
     ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
     const cx = W / 2;
-    const candleW = Math.min(W * 0.2, 72);
+    // Scale with the shorter side so tablets get a bigger candle, not a lost one.
+    const unit = Math.min(W, H);
+    const candleW = clamp(unit * 0.18, 44, 120);
     const candleTop = H * 0.62;
     const flameBase = candleTop - 8;
-    const maxH = Math.min(H * 0.22, 170);
+    const maxH = clamp(unit * 0.45, 90, 300);
     const flameH = maxH * state.size;
     const flicker = 0.85 + 0.15 * Math.sin(time * 23) * Math.sin(time * 7.3);
-    const flameW = candleW * 0.6 * flicker * (0.6 + 0.4 * state.size);
+    const flameW = candleW * 0.8 * flicker * (0.6 + 0.4 * state.size);
     const tipDx = state.lean * 0.6 * flameH + Math.sin(time * 17) * 2 * state.size;
     const glow = state.lit ? state.size : 0;
 
@@ -75,8 +79,8 @@ export function createRenderer(canvas) {
       ctx.globalCompositeOperation = 'source-over';
     }
 
-    // sparks
-    if (state.lit && Math.random() < 0.08 * state.size) {
+    // sparks (rates are per second, independent of frame rate)
+    if (state.lit && Math.random() < 5 * state.size * dt) {
       sparks.push({ x: cx + tipDx * 0.5, y: flameBase - flameH * 0.6, vx: (Math.random() - 0.5) * 20 + state.lean * 30, vy: -40 - Math.random() * 40, ax: 0, life: 1, ttl: 0.8 + Math.random() * 0.6 });
     }
     particles(sparks, dt);
@@ -84,7 +88,7 @@ export function createRenderer(canvas) {
     ctx.globalAlpha = 1;
 
     // smoke
-    if (state.smoke > 0 && Math.random() < 0.5) {
+    if (state.smoke > 0 && Math.random() < 30 * dt) {
       smokes.push({ x: cx, y: candleTop - 14, vx: (Math.random() - 0.5) * 10, vy: -25 - Math.random() * 20, ax: (Math.random() - 0.5) * 20, life: 1, ttl: 2 + Math.random(), r: 4 + Math.random() * 6 });
     }
     particles(smokes, dt);
@@ -96,8 +100,9 @@ export function createRenderer(canvas) {
 
     if (meter) {
       const mw = Math.min(W - 32, 240);
-      ctx.fillStyle = 'rgba(255,138,64,0.25)'; ctx.fillRect(16, 16, mw, 6);
-      ctx.fillStyle = intensity > 0.8 ? '#ff4d1a' : '#ff8a40'; ctx.fillRect(16, 16, mw * intensity, 6);
+      const my = safeTop + 16; // below the notch / status bar
+      ctx.fillStyle = 'rgba(255,138,64,0.25)'; ctx.fillRect(16, my, mw, 6);
+      ctx.fillStyle = intensity > 0.8 ? '#ff4d1a' : '#ff8a40'; ctx.fillRect(16, my, mw * intensity, 6);
     }
   }
 

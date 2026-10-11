@@ -116,17 +116,26 @@ enabled.
 
 ### Page (`candle/main.js`)
 
-- Settings via `createStore({ key: 'celltoys.candle', version: 1, defaults: { sensitivity: 1, showMeter: false } })`.
+- Settings via `createStore({ key: 'celltoys.candle', version: 1, defaults })` with
+  defaults and clamping in the pure `candle/settings.js`.
 - Start screen overlay. First tap: `keepAwake()`, `requestFullscreen()` (on
   pointerup), `startMic()`; on failure show the note "Blowing needs the
   microphone" for 6 s and continue without a detector (intensity 0).
-- Loop with `requestAnimationFrame`; `dt` clamped to 0.05 s; skips when the
-  tab is hidden. Per frame: read mic data → `detector.update` → `stepFlame`
-  → `draw`.
+- Loop with `requestAnimationFrame`, capped at ~60 fps; `dt` clamped to
+  0–0.05 s; skips when the tab is hidden. Per frame: read mic data →
+  `detector.update` → `stepFlame` → `draw`.
+- Microphone lifecycle: capture is released when the page is hidden (no hot
+  mic in the background) and reconnected when it returns or on the next tap;
+  a track ended by the OS (call, Siri) shows "Microphone stopped. Tap to
+  reconnect."
+- After 2 s unlit a "Tap to relight" hint appears in the dark area above the
+  candle and disappears on relight.
 - Pointerup on the canvas when unlit → `relight` (bound directly, not via the
   shared tap recogniser, so there is no double-tap delay).
-- Gear button (top-right, dim) toggles the sheet: sensitivity slider 0.5–3,
-  meter toggle. Sheet auto-hides after 5 s of no interaction.
+- Gear button (top-right, dim, inside the safe area) toggles the sheet:
+  sensitivity slider 0.5–3, meter toggle. Sheet auto-hides after 8 s of no
+  interaction, never while a finger is on it. The meter is drawn below the
+  top safe-area inset.
 
 ## 4. Visual
 

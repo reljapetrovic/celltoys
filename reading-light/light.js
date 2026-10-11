@@ -9,7 +9,7 @@ export const PRESETS = [
 export const DEFAULT_SETTINGS = Object.freeze({
   preset: 'amber',
   startBrightness: 1,
-  floorBrightness: 0.2,
+  floorBrightness: 0.35,
   holdMinutes: 15,
   fadeMinutes: 10,
   hueShift: true,
@@ -18,7 +18,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
 
 export const LIMITS = Object.freeze({
   startBrightness: [0.2, 1],
-  floorBrightness: [0.1, 0.5],
+  floorBrightness: [0.1, 0.6],
   holdMinutes: [0, 120],
   fadeMinutes: [1, 60],
 });
@@ -49,14 +49,22 @@ export function clampSettings(partial) {
 }
 
 // brightness is perceptual (0..1); channels scale by brightness^2.2.
-export function brightnessToRgb(presetId, brightness) {
+function rgbAtBrightness(rgb, brightness) {
   if (!(brightness > 0)) return [0, 0, 0];
-  const { rgb } = presetById(presetId);
   const scale = Math.min(1, brightness) ** GAMMA;
   const out = rgb.map(c => Math.round(c * scale));
   const dominant = rgb.indexOf(Math.max(...rgb));
   out[dominant] = Math.max(2, out[dominant]); // never render black unintentionally
   return out;
+}
+
+export function brightnessToRgb(presetId, brightness) {
+  return rgbAtBrightness(presetById(presetId).rgb, brightness);
+}
+
+// Linear mix of two base colours; k = 0 gives `from`, k = 1 gives `to`.
+function mixRgb(from, to, k) {
+  return from.map((c, i) => c + (to[i] - c) * k);
 }
 
 // Exponential in luminance: linear in log-brightness from start to floor.
@@ -71,8 +79,10 @@ export function hueShiftPreset(presetId, t, enabled) {
   return PRESETS[Math.min(PRESETS.length - 1, i + 1)].id;
 }
 
-export function timerState(settings, startedAt, now) {
-  const holdMs = settings.holdMinutes * MIN_MS;
+// `extraHoldMs` is session time added with "+5 min"; it lengthens the hold
+// phase directly so the extension is never lost early in a session.
+export function timerState(settings, startedAt, now, extraHoldMs = 0) {
+  const holdMs = settings.holdMinutes * MIN_MS + extraHoldMs;
   const fadeMs = settings.fadeMinutes * MIN_MS;
   const elapsedMs = Math.max(0, now - startedAt);
   const total = holdMs + fadeMs;
@@ -85,8 +95,12 @@ export function timerState(settings, startedAt, now) {
   return { phase: 'floor', fadeProgress: 1, remainingMs: 0, elapsedMs };
 }
 
-export function extendSchedule(startedAt, minutes) {
-  return startedAt + minutes * MIN_MS;
+// "+5 min": during the hold it lengthens the hold; during the fade or the
+// night-light it gives `minutes` of full light from now, then the fade again.
+export function extendHold(settings, timer, extraHoldMs, minutes) {
+  const addMs = minutes * MIN_MS;
+  if (timer.phase === 'hold') return extraHoldMs + addMs;
+  return timer.elapsedMs - settings.holdMinutes * MIN_MS + addMs;
 }
 
 // Session-only brightness floor/ceiling for swipe offsets outside the hold phase.
@@ -101,14 +115,21 @@ export function currentLight(settings, timer, offset = 0) {
   else if (phase === 'fade') brightness = fadeBrightness(settings.startBrightness, settings.floorBrightness, fadeProgress);
   else brightness = settings.floorBrightness;
   if (phase !== 'hold') brightness = Math.min(1, Math.max(OFFSET_MIN, brightness + offset));
-  const presetId = hueShiftPreset(settings.preset, phase === 'hold' ? 0 : fadeProgress, settings.hueShift);
-  return { presetId, brightness, rgb: brightnessToRgb(presetId, brightness) };
+  const t = phase === 'hold' ? 0 : fadeProgress;
+  // The named preset switches at half-fade (used for UI colour); the light
+  // itself blends continuously so there is no visible colour step.
+  const presetId = hueShiftPreset(settings.preset, t, settings.hueShift);
+  const from = presetById(settings.preset).rgb;
+  const to = presetById(hueShiftPreset(settings.preset, 1, settings.hueShift)).rgb;
+  const base = settings.hueShift ? mixRgb(from, to, t) : from;
+  return { presetId, brightness, rgb: rgbAtBrightness(base, brightness) };
 }
 
-// Colour for the control sheet: the preset at a fixed readable level, so the
-// controls stay legible even when the light itself is a faint ember.
+// Colour for the control sheet: the full preset colour, independent of the
+// fade level, so the controls stay legible even when the light is a faint
+// ember. A few seconds of amber text costs nothing melanopically.
 export function uiColor(presetId) {
-  return brightnessToRgb(presetId, 0.6);
+  return brightnessToRgb(presetId, 1);
 }
 
 // How often the page needs to re-render. Only the fade changes visibly.

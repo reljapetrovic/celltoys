@@ -12,14 +12,17 @@
   <link rel="apple-touch-icon" href="/candle/icon-180.png">
   <title>Candle</title>
   <link rel="stylesheet" href="/shared/base.css">
+  <link rel="stylesheet" href="/shared/sheet.css">
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-  <canvas id="scene"></canvas>
-  <div id="start"><span>Tap to light the candle</span><small>Then blow at the phone</small></div>
-  <div id="note" hidden></div>
+  <canvas id="scene" role="img" aria-label="A candle. Tap to light it, then blow at the phone to make the flame move."></canvas>
+  <div id="safe-probe" aria-hidden="true"></div>
+  <button id="start"><span>Tap to light the candle</span><small>Then blow at the phone</small></button>
+  <div id="note" class="toast" role="status" aria-live="polite" hidden></div>
+  <div id="relight" hidden>Tap to relight</div>
   <button id="gear" aria-label="Settings">⚙</button>
-  <section id="sheet" hidden aria-label="Settings">
+  <section id="sheet" class="sheet" hidden aria-label="Settings">
     <label class="row"><span>Sensitivity <output id="sensOut"></output></span>
       <input id="sensitivity" type="range" min="0.5" max="3" step="0.1"></label>
     <div class="row"><button id="meter" aria-pressed="false">Show blow meter</button></div>

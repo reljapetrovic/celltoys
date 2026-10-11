@@ -1,5 +1,10 @@
+// An installed PWA already fills the screen (standalone or fullscreen display
+// mode), so asking for element fullscreen there is pointless.
 export function isStandalone() {
-  return window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true;
+  const mq = window.matchMedia;
+  return mq?.('(display-mode: standalone)').matches
+    || mq?.('(display-mode: fullscreen)').matches
+    || navigator.standalone === true;
 }
 
 // iPhone Safari has no element fullscreen; Android and desktop do.
