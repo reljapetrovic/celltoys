@@ -12,14 +12,16 @@
   <link rel="apple-touch-icon" href="/reading-light/icon-180.png">
   <title>Reading Light</title>
   <link rel="stylesheet" href="/shared/base.css">
+  <link rel="stylesheet" href="/shared/sheet.css">
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-  <div id="light" aria-label="Reading light surface"></div>
+  <div id="light" role="button" tabindex="0" aria-label="Reading light. Tap for controls, swipe up or down for brightness, double-tap to pause."></div>
   <div id="clock" aria-hidden="true"></div>
-  <div id="hint" hidden>Set your phone brightness to about 15 %, then adjust here.</div>
+  <div id="paused" class="pill" hidden>Paused · double-tap to resume</div>
+  <div id="hint" class="toast" role="status" aria-live="polite" hidden></div>
 
-  <section id="sheet" hidden aria-label="Controls">
+  <section id="sheet" class="sheet" hidden aria-label="Controls">
     <div class="row status">
       <span id="status">Reading</span>
       <span id="remaining"></span>
@@ -31,17 +33,17 @@
     </div>
     <label class="row"><span>Brightness</span>
       <input id="brightness" type="range" min="0.2" max="1" step="0.01"></label>
-    <label class="row"><span>Hold <output id="holdOut"></output> min</span>
+    <label class="row"><span>Bright for <output id="holdOut"></output> min</span>
       <input id="hold" type="range" min="0" max="120" step="1"></label>
-    <label class="row"><span>Fade <output id="fadeOut"></output> min</span>
+    <label class="row"><span>Dim over <output id="fadeOut"></output> min</span>
       <input id="fade" type="range" min="1" max="60" step="1"></label>
     <label class="row"><span>Night-light <output id="floorOut"></output> %</span>
-      <input id="floor" type="range" min="0.1" max="0.5" step="0.01"></label>
-    <div class="row toggles">
+      <input id="floor" type="range" min="0.1" max="0.6" step="0.01"></label>
+    <div class="row wrap toggles">
       <button id="hueShift" aria-pressed="true">Warm as it fades</button>
       <button id="showClock" aria-pressed="true">Clock</button>
     </div>
-    <div class="row actions">
+    <div class="row wrap actions">
       <button id="extend">+5 min</button>
       <button id="pause">Pause</button>
       <button id="restart">Restart</button>
